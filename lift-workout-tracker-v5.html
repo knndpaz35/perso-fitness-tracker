@@ -865,9 +865,6 @@ const EX = {
 // ════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://myzxtobejjhjraesywnk.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15enh0b2JlampoanJhZXN5d25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1ODQ4NzEsImV4cCI6MjA5NDE2MDg3MX0.JtBEYjmXPZf6CcnE13wl13AMvC0QMT98KrIfzS071HU';
-const USER_ID = 'perso-fitness-tracker';
 const KEY = 'lift_v1';
 
 function initState() {
@@ -885,68 +882,26 @@ function initState() {
   };
 }
 
-function normalizeState(s) {
-  if (!s || typeof s !== 'object') return initState();
-  if (!s.startDate) s.startDate = ds(new Date());
-  if (!s.logs) s.logs = {};
-  if (typeof s.streak !== 'number') s.streak = 0;
-  if (typeof s.sessions !== 'number') s.sessions = 0;
-  if (!s.prs) s.prs = {};
-  if (!s.unit) s.unit = 'kg';
-  if (!s.theme) s.theme = 'dark';
-  if (!('todayOverride' in s)) s.todayOverride = null;
-  if (!('lastOverrideDate' in s)) s.lastOverrideDate = null;
-  if (!s.exUnits) s.exUnits = {};
-  return s;
-}
-
-// Save — writes to localStorage instantly, syncs to Supabase in background
-async function saveState() {
-  try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({ user_id: USER_ID, data: ST })
-    });
-  } catch(e) { console.log('Supabase sync failed - saved locally'); }
-}
-
-// Load — fetches from Supabase, falls back to localStorage if offline
-async function loadState() {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${USER_ID}&select=data`,
-      {
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${SUPABASE_KEY}`
-        }
-      }
-    );
-    const rows = await res.json();
-    if (rows.length > 0) {
-      const s = normalizeState(rows[0].data);
-      localStorage.setItem(KEY, JSON.stringify(s));
-      return s;
-    }
-  } catch(e) { console.log('Could not reach Supabase - using local data'); }
-
-  // Fallback to localStorage
+function loadState() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return normalizeState(JSON.parse(raw));
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (!s.unit) s.unit = 'kg';
+      if (!s.theme) s.theme = 'dark';
+      if (!('todayOverride' in s)) s.todayOverride = null;
+      if (!('lastOverrideDate' in s)) s.lastOverrideDate = null;
+      return s;
+    }
   } catch(e) {}
-
   return initState();
 }
 
-let ST = {};
+function saveState() {
+  try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
+}
+
+let ST = loadState();
 
 function ds(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1680,11 +1635,8 @@ function showToast(msg) {
 // ════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════
-loadState().then(data => {
-  ST = data;
-  applyTheme();
-  renderHome();
-});
+applyTheme();
+renderHome();
 </script>
 </body>
 </html>
