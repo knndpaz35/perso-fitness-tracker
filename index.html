@@ -871,17 +871,13 @@ const USER_ID = 'perso-fitness-tracker';
 const KEY = 'lift_v1';
 
 function initState() {
-  // Calculate startDate so today = Upper Body (index 3 in cycle)
-  // Today's day-of-week offset into cycle should be 3
-  const todayDate = new Date();
-  // We want dayIdx(today) = 3, so startDate = today - 3 days
-  const start = new Date(todayDate);
-  start.setDate(start.getDate() - 3);
+  // Brand new user — start from today as Push Day (Day 1)
   return {
-    startDate: ds(start),
+    startDate: ds(new Date()),
     logs: {}, streak: 0, sessions: 0, prs: {},
     unit: 'kg', theme: 'dark',
-    todayOverride: null, lastOverrideDate: null
+    todayOverride: null, lastOverrideDate: null,
+    exUnits: {}
   };
 }
 
@@ -897,6 +893,8 @@ function normalizeState(s) {
   if (!('todayOverride' in s)) s.todayOverride = null;
   if (!('lastOverrideDate' in s)) s.lastOverrideDate = null;
   if (!s.exUnits) s.exUnits = {};
+  // Ensure startDate is never in the future (guards against clock issues)
+  if (s.startDate > ds(new Date())) s.startDate = ds(new Date());
   return s;
 }
 
@@ -952,8 +950,14 @@ function ds(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function today() { return ds(new Date()); }
+function parseLocalDate(dateStr) {
+  // Parse YYYY-MM-DD as LOCAL midnight, not UTC midnight
+  // This prevents timezone offset from shifting the date by 1 day
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
 function dayIdx(dateStr) {
-  const ms = new Date(dateStr) - new Date(ST.startDate);
+  const ms = parseLocalDate(dateStr) - parseLocalDate(ST.startDate);
   const diff = Math.floor(ms / 86400000);
   return ((diff % 7) + 7) % 7;
 }
@@ -1192,12 +1196,14 @@ function renderHome() {
     btn.textContent = miss.actionLabel;
     btn.onclick = () => {
       if (miss.restart) {
-        // Restart: set startDate so today = Day 1 (push)
+        // Restart: shift startDate so today = Day 1 (push)
+        // Logs are preserved — only the schedule anchor changes
         ST.startDate = today();
         ST.todayOverride = null;
         ST.lastOverrideDate = null;
+        // Do NOT clear logs, streak, sessions, or prs
         saveState();
-        showToast('Schedule reset — starting from Push Day today.');
+        showToast('Schedule reset to Push Day. Your logs are safe.');
         renderHome();
       } else {
         sugBox.classList.remove('show');
