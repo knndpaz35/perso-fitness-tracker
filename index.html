@@ -668,6 +668,7 @@ body {
 <div class="topbar">
   <div class="logo">LIFT<span>.</span></div>
   <div class="topbar-right">
+    <div id="sync-dot" title="Sync status" style="width:8px;height:8px;border-radius:50%;background:var(--ink3);transition:background 0.4s;flex-shrink:0;" title="Cloud sync"></div>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <nav class="nav">
       <button class="nb active" onclick="goto('home',this)">Today</button>
@@ -901,18 +902,30 @@ function normalizeState(s) {
 // Save — writes to localStorage instantly, syncs to Supabase in background
 async function saveState() {
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
+  showSyncStatus('syncing');
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
+    const payload = { user_id: USER_ID, data: ST };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_KEY,
         'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer': 'resolution=merge-duplicates'
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
-      body: JSON.stringify({ user_id: USER_ID, data: ST })
+      body: JSON.stringify(payload)
     });
-  } catch(e) { console.log('Supabase sync failed - saved locally'); }
+    if (!res.ok) {
+      const err = await res.text();
+      console.warn('Supabase save error:', res.status, err);
+      showSyncStatus('error');
+    } else {
+      showSyncStatus('ok');
+    }
+  } catch(e) {
+    console.warn('Supabase sync failed - saved locally:', e.message);
+    showSyncStatus('offline');
+  }
 }
 
 // Load — fetches from Supabase, falls back to localStorage if offline
@@ -929,7 +942,12 @@ async function loadState() {
     );
     const rows = await res.json();
     if (rows.length > 0) {
-      const s = normalizeState(rows[0].data);
+      // Handle data being stored as a JSON string OR as a proper object
+      let raw = rows[0].data;
+      if (typeof raw === 'string') {
+        try { raw = JSON.parse(raw); } catch(e) {}
+      }
+      const s = normalizeState(raw);
       localStorage.setItem(KEY, JSON.stringify(s));
       return s;
     }
@@ -1114,10 +1132,23 @@ function overrideSplit(val) {
   if (!val) return;
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
-  ST.todayOverride = val;
-  ST.lastOverrideDate = today();
+
+  // Permanently shift startDate so the entire future schedule is correct
+  // Find what index val is in the cycle, set startDate = today - that index
+  const targetIdx = CYCLE.indexOf(val);
+  if (targetIdx !== -1) {
+    const newStart = new Date();
+    newStart.setDate(newStart.getDate() - targetIdx);
+    ST.startDate = ds(newStart);
+    ST.todayOverride = null;
+    ST.lastOverrideDate = null;
+  } else {
+    // rest day — just use override for today
+    ST.todayOverride = val;
+    ST.lastOverrideDate = today();
+  }
   saveState();
-  showToast(`Switched to ${SNAME[val]}`);
+  showToast(`Schedule set — today is ${SNAME[val]}`);
   renderHome();
 }
 
@@ -1682,6 +1713,13 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
+function showSyncStatus(status) {
+  const dot = document.getElementById('sync-dot');
+  if (!dot) return;
+  const colors = { ok: '#00ff94', error: '#ff4d6d', offline: '#ff9500', syncing: '#f0ff44' };
+  dot.style.background = colors[status] || 'var(--ink3)';
+  dot.title = { ok: '✓ Synced to cloud', error: '✗ Sync failed — check console', offline: '⚠ Offline — saved locally', syncing: '↑ Syncing...' }[status] || '';
+}
 
 // ════════════════════════════════════════════════════════
 // INIT
@@ -1690,6 +1728,8 @@ loadState().then(data => {
   ST = data;
   applyTheme();
   renderHome();
+  // Show sync status on load
+  showSyncStatus('ok');
 });
 </script>
 </body>
