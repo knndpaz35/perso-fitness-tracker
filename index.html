@@ -668,7 +668,7 @@ body {
 <div class="topbar">
   <div class="logo">LIFT<span>.</span></div>
   <div class="topbar-right">
-    <div id="sync-dot" title="Sync status" style="width:8px;height:8px;border-radius:50%;background:var(--ink3);transition:background 0.4s;flex-shrink:0;" title="Cloud sync"></div>
+    <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#44445a;flex-shrink:0;transition:background 0.4s;cursor:default;" title="Sync status"></div>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <nav class="nav">
       <button class="nb active" onclick="goto('home',this)">Today</button>
@@ -872,7 +872,6 @@ const USER_ID = 'perso-fitness-tracker';
 const KEY = 'lift_v1';
 
 function initState() {
-  // Brand new user — start from today as Push Day (Day 1)
   return {
     startDate: ds(new Date()),
     logs: {}, streak: 0, sessions: 0, prs: {},
@@ -883,7 +882,12 @@ function initState() {
 }
 
 function normalizeState(s) {
+  // Handle data stored as a JSON string instead of object (Supabase TEXT vs JSONB issue)
+  if (typeof s === 'string') {
+    try { s = JSON.parse(s); } catch(e) { return initState(); }
+  }
   if (!s || typeof s !== 'object') return initState();
+  // Preserve existing startDate — never overwrite it with today
   if (!s.startDate) s.startDate = ds(new Date());
   if (!s.logs) s.logs = {};
   if (typeof s.streak !== 'number') s.streak = 0;
@@ -894,38 +898,68 @@ function normalizeState(s) {
   if (!('todayOverride' in s)) s.todayOverride = null;
   if (!('lastOverrideDate' in s)) s.lastOverrideDate = null;
   if (!s.exUnits) s.exUnits = {};
-  // Ensure startDate is never in the future (guards against clock issues)
-  if (s.startDate > ds(new Date())) s.startDate = ds(new Date());
   return s;
 }
 
-// Save — writes to localStorage instantly, syncs to Supabase in background
+// Save — writes to localStorage instantly, then upserts to Supabase
 async function saveState() {
+  // 1. Save locally first — instant, never fails
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
-  showSyncStatus('syncing');
+
+  // 2. Try to UPDATE existing row first (row already exists in DB)
   try {
-    const payload = { user_id: USER_ID, data: ST };
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/workout_logs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn('Supabase save error:', res.status, err);
-      showSyncStatus('error');
-    } else {
-      showSyncStatus('ok');
+    const patchRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${USER_ID}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=representation,count=exact'
+        },
+        body: JSON.stringify({ data: JSON.stringify(ST) })
+      }
+    );
+    // Check if PATCH actually updated a row (count header tells us)
+    const count = patchRes.headers.get('Content-Range');
+    if (patchRes.ok && count && count !== '*/0') {
+      setSyncDot('green');
+      return; // row existed and was updated — done
     }
+    // Row didn't exist or PATCH failed — fall through to INSERT
+  } catch(e) {}
+
+  // 3. INSERT new row if PATCH found nothing
+  try {
+    const postRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/workout_logs`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ user_id: USER_ID, data: JSON.stringify(ST) })
+      }
+    );
+    if (postRes.ok) { setSyncDot('green'); return; }
+    setSyncDot('red');
+    console.warn('Supabase save failed:', await postRes.text());
   } catch(e) {
-    console.warn('Supabase sync failed - saved locally:', e.message);
-    showSyncStatus('offline');
+    setSyncDot('orange');
+    console.warn('Supabase offline — saved locally only');
   }
+}
+
+function setSyncDot(color) {
+  const dot = document.getElementById('sync-dot');
+  if (!dot) return;
+  const map = { green: '#00ff94', red: '#ff4d6d', orange: '#ff9500', yellow: '#f0ff44' };
+  dot.style.background = map[color] || '#44445a';
+  dot.title = { green: '✓ Saved to cloud', red: '✗ Cloud save failed', orange: '⚠ Offline — local only', yellow: '↑ Saving...' }[color] || '';
 }
 
 // Load — fetches from Supabase, falls back to localStorage if offline
@@ -942,10 +976,10 @@ async function loadState() {
     );
     const rows = await res.json();
     if (rows.length > 0) {
-      // Handle data being stored as a JSON string OR as a proper object
+      // data may be a JSON string (TEXT column) or object (JSONB column) — handle both
       let raw = rows[0].data;
       if (typeof raw === 'string') {
-        try { raw = JSON.parse(raw); } catch(e) {}
+        try { raw = JSON.parse(raw); } catch(e) { raw = null; }
       }
       const s = normalizeState(raw);
       localStorage.setItem(KEY, JSON.stringify(s));
@@ -968,14 +1002,13 @@ function ds(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function today() { return ds(new Date()); }
-function parseLocalDate(dateStr) {
-  // Parse YYYY-MM-DD as LOCAL midnight, not UTC midnight
-  // This prevents timezone offset from shifting the date by 1 day
+function parseLocal(dateStr) {
+  // Always parse YYYY-MM-DD as LOCAL midnight to avoid UTC offset shifting the date
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 function dayIdx(dateStr) {
-  const ms = parseLocalDate(dateStr) - parseLocalDate(ST.startDate);
+  const ms = parseLocal(dateStr) - parseLocal(ST.startDate);
   const diff = Math.floor(ms / 86400000);
   return ((diff % 7) + 7) % 7;
 }
@@ -1133,19 +1166,19 @@ function overrideSplit(val) {
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
 
-  // Permanently shift startDate so the entire future schedule is correct
-  // Find what index val is in the cycle, set startDate = today - that index
-  const targetIdx = CYCLE.indexOf(val);
-  if (targetIdx !== -1) {
-    const newStart = new Date();
+  if (val === 'rest') {
+    // Rest day: just override today, don't shift the cycle
+    ST.todayOverride = 'rest';
+    ST.lastOverrideDate = today();
+  } else {
+    // Permanently shift startDate so today = chosen split
+    // and ALL future days recalculate correctly from this anchor
+    const targetIdx = CYCLE.indexOf(val);
+    const newStart = parseLocal(today());
     newStart.setDate(newStart.getDate() - targetIdx);
     ST.startDate = ds(newStart);
     ST.todayOverride = null;
     ST.lastOverrideDate = null;
-  } else {
-    // rest day — just use override for today
-    ST.todayOverride = val;
-    ST.lastOverrideDate = today();
   }
   saveState();
   showToast(`Schedule set — today is ${SNAME[val]}`);
@@ -1227,14 +1260,12 @@ function renderHome() {
     btn.textContent = miss.actionLabel;
     btn.onclick = () => {
       if (miss.restart) {
-        // Restart: shift startDate so today = Day 1 (push)
-        // Logs are preserved — only the schedule anchor changes
+        // Restart: set startDate so today = Day 1 (push)
         ST.startDate = today();
         ST.todayOverride = null;
         ST.lastOverrideDate = null;
-        // Do NOT clear logs, streak, sessions, or prs
         saveState();
-        showToast('Schedule reset to Push Day. Your logs are safe.');
+        showToast('Schedule reset — starting from Push Day today.');
         renderHome();
       } else {
         sugBox.classList.remove('show');
@@ -1713,13 +1744,6 @@ function showToast(msg) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
-function showSyncStatus(status) {
-  const dot = document.getElementById('sync-dot');
-  if (!dot) return;
-  const colors = { ok: '#00ff94', error: '#ff4d6d', offline: '#ff9500', syncing: '#f0ff44' };
-  dot.style.background = colors[status] || 'var(--ink3)';
-  dot.title = { ok: '✓ Synced to cloud', error: '✗ Sync failed — check console', offline: '⚠ Offline — saved locally', syncing: '↑ Syncing...' }[status] || '';
-}
 
 // ════════════════════════════════════════════════════════
 // INIT
@@ -1728,8 +1752,7 @@ loadState().then(data => {
   ST = data;
   applyTheme();
   renderHome();
-  // Show sync status on load
-  showSyncStatus('ok');
+  setSyncDot('green');
 });
 </script>
 </body>
