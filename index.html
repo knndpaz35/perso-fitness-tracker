@@ -847,8 +847,8 @@ const EX = {
      def:'Band at chest height, hands shoulder-width. Pull apart until band touches chest. Squeeze rear delts at full stretch. Return controlled. Finishes posterior deltoid and maintains shoulder health.'},
   ],
   lower:[
-    {id:'sl_thrust', name:'Single-Leg Hip Thrust',   target:'4 × 10–12',  muscles:'Gluteus Maximus — Unilateral',    yt:'GJPjT5K9cyI',
-     def:'Same setup as bilateral. One leg extended. Dumbbell on working hip. Drive through planted heel, squeeze glute at full extension. Corrects left-right imbalances bilateral work masks.'},
+    {id:'hip_thrust2',name:'Barbell Hip Thrust',        target:'4 × 8–12',   muscles:'Gluteus Maximus — Primary',       yt:'LM8XHLYJoYs',
+     def:'Upper back on flat bench, barbell across hip crease (use pad). Feet flat, shoulder-width, toes slightly out. Drive through heels and squeeze glutes HARD at full hip extension — hold 1–2 seconds at the top. Lower with control, hips nearly touch floor each rep. Research (Kassiano et al. 2024) confirms hip thrusts produce the highest gluteus maximus activation of any exercise. Load progressively — this is your primary glute mass builder for the week.'},
     {id:'rdl2',      name:'Dumbbell Romanian DL',     target:'4 × 10–12',  muscles:'Hamstrings · Glutes',             yt:'JCXUYuzwNrM',
      def:'Second RDL. DBs allow slightly greater ROM. Go light enough to fully feel the hamstring stretch. 3-second eccentric. Foundation of lower glute and hamstring development.'},
     {id:'sumo',      name:'Barbell Sumo Squat',       target:'3 × 8–12',   muscles:'Glutes · Inner Thighs · Quads',   yt:'Fob2woz9-dc',
@@ -903,8 +903,10 @@ function normalizeState(s) {
 
 // Save — writes to localStorage instantly, then upserts to Supabase
 async function saveState() {
+  if (!ST_LOADED) return; // don't save empty state before load completes
   // 1. Save locally first — instant, never fails
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
+  setSyncDot('yellow');
 
   // 2. Try to UPDATE existing row first (row already exists in DB)
   try {
@@ -921,13 +923,12 @@ async function saveState() {
         body: JSON.stringify({ data: JSON.stringify(ST) })
       }
     );
-    // Check if PATCH actually updated a row (count header tells us)
-    const count = patchRes.headers.get('Content-Range');
-    if (patchRes.ok && count && count !== '*/0') {
+    // 204 = updated, 200 = updated with data returned, anything else = row missing or error
+    if (patchRes.status === 204 || patchRes.status === 200) {
       setSyncDot('green');
       return; // row existed and was updated — done
     }
-    // Row didn't exist or PATCH failed — fall through to INSERT
+    // Row didn't exist yet — fall through to INSERT
   } catch(e) {}
 
   // 3. INSERT new row if PATCH found nothing
@@ -997,6 +998,7 @@ async function loadState() {
 }
 
 let ST = {};
+let ST_LOADED = false; // prevents saveState from firing before load completes
 
 function ds(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1750,6 +1752,7 @@ function showToast(msg) {
 // ════════════════════════════════════════════════════════
 loadState().then(data => {
   ST = data;
+  ST_LOADED = true; // now safe to save
   applyTheme();
   renderHome();
   setSyncDot('green');
