@@ -668,7 +668,6 @@ body {
 <div class="topbar">
   <div class="logo">LIFT<span>.</span></div>
   <div class="topbar-right">
-    <div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#44445a;flex-shrink:0;transition:background 0.4s;cursor:default;" title="Sync status"></div>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <nav class="nav">
       <button class="nb active" onclick="goto('home',this)">Today</button>
@@ -827,10 +826,10 @@ const EX = {
      def:'Bar at hip level. Push hips BACK. Lower maintaining neutral spine until deep hamstring stretch. Drive hips forward, squeeze glutes at lockout. Slow eccentric is the whole point.'},
     {id:'bss',       name:'Bulgarian Split Squat',   target:'3 × 10–12',  muscles:'Glutes · Quads',                  yt:'2C-uNgKwPLE',
      def:'Rear foot on bench. Lean torso 10–15° forward. Lower until rear knee nearly touches floor. Push through front heel. Lean forward to bias glutes over quads.'},
-    {id:'hip_abduct',name:'Band Hip Abduction',      target:'3 × 15–20',  muscles:'Gluteus Medius',                  yt:'SBEGNMSsZJQ',
-     def:'Band above knees. Slight hip hinge. Lift leg to side against band. Squeeze glute medius at top. Controls outer glute shape — cannot be built from squats alone.'},
-    {id:'sl_bridge', name:'Single-Leg Glute Bridge', target:'3 × 12–15',  muscles:'Gluteus Maximus — Isolation',     yt:'GJPjT5K9cyI',
-     def:'Lie on floor, one foot flat, other leg extended. Dumbbell on working hip. Drive through heel, raise hips. Squeeze glute hard — 2 sec hold. Great for mind-muscle connection.'},
+    {id:'hip_abduct',name:'Dumbbell Side-Lying Abduction', target:'3 × 12–15', muscles:'Gluteus Medius · Minimus',      yt:'SBEGNMSsZJQ',
+     def:'Lie on your side on the bench or floor, dumbbell resting on your top thigh just above the knee. Stack hips vertically — do not let them roll back. Raise the top leg upward against the dumbbell resistance, squeezing the glute medius hard at the top. Lower with a 3-second eccentric. Unlike bands, a dumbbell allows true progressive overload for the glute medius — the muscle responsible for the round outer-hip shape that squats and hip thrusts cannot build. Research by Contreras (2015) and Neto et al. (2020) confirms weighted abduction produces significantly greater glute medius activation than band variations.'},
+    {id:'sl_bridge', name:'Dumbbell Deficit RDL',     target:'3 × 10–12',  muscles:'Hamstrings · Lower Glutes — Stretch', yt:'JCXUYuzwNrM',
+     def:'Stand on the flat bench or two weight plates to create a 2–4 inch deficit. Hold dumbbells in front of thighs. Push hips back and lower the dumbbells below the level of the platform — this extra range of motion puts the hamstrings and lower glutes under a deeper stretch than a conventional RDL from the floor. Research by Maeo et al. (2021) demonstrated that training muscles in the lengthened position produces up to 40% greater hypertrophy compared to standard range of motion. Keep your back neutral, lower with a 3-second eccentric, then drive hips forward and squeeze glutes at lockout. Use lighter weight than your regular RDL — the deficit significantly increases the stretch stimulus.'},
   ],
   upper:[
     {id:'db_ohp',    name:'Dumbbell Overhead Press', target:'4 × 8–10',   muscles:'All 3 Deltoid Heads · Triceps',   yt:'qEwKCR5JCog',
@@ -847,7 +846,7 @@ const EX = {
      def:'Band at chest height, hands shoulder-width. Pull apart until band touches chest. Squeeze rear delts at full stretch. Return controlled. Finishes posterior deltoid and maintains shoulder health.'},
   ],
   lower:[
-    {id:'hip_thrust2',name:'Barbell Hip Thrust',        target:'4 × 8–12',   muscles:'Gluteus Maximus — Primary',       yt:'LM8XHLYJoYs',
+    {id:'hip_thrust2',name:'Barbell Hip Thrust',       target:'4 × 8–12',   muscles:'Gluteus Maximus — Primary',       yt:'LM8XHLYJoYs',
      def:'Upper back on flat bench, barbell across hip crease (use pad). Feet flat, shoulder-width, toes slightly out. Drive through heels and squeeze glutes HARD at full hip extension — hold 1–2 seconds at the top. Lower with control, hips nearly touch floor each rep. Research (Kassiano et al. 2024) confirms hip thrusts produce the highest gluteus maximus activation of any exercise. Load progressively — this is your primary glute mass builder for the week.'},
     {id:'rdl2',      name:'Dumbbell Romanian DL',     target:'4 × 10–12',  muscles:'Hamstrings · Glutes',             yt:'JCXUYuzwNrM',
      def:'Second RDL. DBs allow slightly greater ROM. Go light enough to fully feel the hamstring stretch. 3-second eccentric. Foundation of lower glute and hamstring development.'},
@@ -882,12 +881,8 @@ function initState() {
 }
 
 function normalizeState(s) {
-  // Handle data stored as a JSON string instead of object (Supabase TEXT vs JSONB issue)
-  if (typeof s === 'string') {
-    try { s = JSON.parse(s); } catch(e) { return initState(); }
-  }
+  if (typeof s === 'string') { try { s = JSON.parse(s); } catch(e) { return initState(); } }
   if (!s || typeof s !== 'object') return initState();
-  // Preserve existing startDate — never overwrite it with today
   if (!s.startDate) s.startDate = ds(new Date());
   if (!s.logs) s.logs = {};
   if (typeof s.streak !== 'number') s.streak = 0;
@@ -901,14 +896,13 @@ function normalizeState(s) {
   return s;
 }
 
-// Save — writes to localStorage instantly, then upserts to Supabase
+let ST_LOADED = false;
+
 async function saveState() {
-  if (!ST_LOADED) return; // don't save empty state before load completes
-  // 1. Save locally first — instant, never fails
+  if (!ST_LOADED) return;
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
   setSyncDot('yellow');
-
-  // 2. Try to UPDATE existing row first (row already exists in DB)
+  const dataStr = JSON.stringify(ST);
   try {
     const patchRes = await fetch(
       `${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${USER_ID}`,
@@ -918,20 +912,15 @@ async function saveState() {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_KEY,
           'Authorization': `Bearer ${SUPABASE_KEY}`,
-          'Prefer': 'return=representation,count=exact'
+          'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ data: JSON.stringify(ST) })
+        body: JSON.stringify({ data: dataStr })
       }
     );
-    // 204 = updated, 200 = updated with data returned, anything else = row missing or error
     if (patchRes.status === 204 || patchRes.status === 200) {
-      setSyncDot('green');
-      return; // row existed and was updated — done
+      setSyncDot('green'); return;
     }
-    // Row didn't exist yet — fall through to INSERT
   } catch(e) {}
-
-  // 3. INSERT new row if PATCH found nothing
   try {
     const postRes = await fetch(
       `${SUPABASE_URL}/rest/v1/workout_logs`,
@@ -943,24 +932,27 @@ async function saveState() {
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ user_id: USER_ID, data: JSON.stringify(ST) })
+        body: JSON.stringify({ user_id: USER_ID, data: dataStr })
       }
     );
     if (postRes.ok) { setSyncDot('green'); return; }
     setSyncDot('red');
-    console.warn('Supabase save failed:', await postRes.text());
+    console.warn('Supabase save error:', await postRes.text());
   } catch(e) {
     setSyncDot('orange');
-    console.warn('Supabase offline — saved locally only');
+    console.warn('Offline — saved locally only');
   }
 }
 
 function setSyncDot(color) {
   const dot = document.getElementById('sync-dot');
   if (!dot) return;
-  const map = { green: '#00ff94', red: '#ff4d6d', orange: '#ff9500', yellow: '#f0ff44' };
+  const map = { green:'#00ff94', red:'#ff4d6d', orange:'#ff9500', yellow:'#f0ff44' };
   dot.style.background = map[color] || '#44445a';
-  dot.title = { green: '✓ Saved to cloud', red: '✗ Cloud save failed', orange: '⚠ Offline — local only', yellow: '↑ Saving...' }[color] || '';
+  dot.title = {
+    green:'✓ Saved to cloud', red:'✗ Cloud save failed',
+    orange:'⚠ Offline — saved locally', yellow:'↑ Saving...'
+  }[color] || '';
 }
 
 // Load — fetches from Supabase, falls back to localStorage if offline
@@ -977,11 +969,8 @@ async function loadState() {
     );
     const rows = await res.json();
     if (rows.length > 0) {
-      // data may be a JSON string (TEXT column) or object (JSONB column) — handle both
       let raw = rows[0].data;
-      if (typeof raw === 'string') {
-        try { raw = JSON.parse(raw); } catch(e) { raw = null; }
-      }
+      if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch(e) { raw = null; } }
       const s = normalizeState(raw);
       localStorage.setItem(KEY, JSON.stringify(s));
       return s;
@@ -998,16 +987,14 @@ async function loadState() {
 }
 
 let ST = {};
-let ST_LOADED = false; // prevents saveState from firing before load completes
 
 function ds(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function today() { return ds(new Date()); }
 function parseLocal(dateStr) {
-  // Always parse YYYY-MM-DD as LOCAL midnight to avoid UTC offset shifting the date
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return new Date(y, m-1, d);
 }
 function dayIdx(dateStr) {
   const ms = parseLocal(dateStr) - parseLocal(ST.startDate);
@@ -1167,14 +1154,10 @@ function overrideSplit(val) {
   if (!val) return;
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
-
   if (val === 'rest') {
-    // Rest day: just override today, don't shift the cycle
     ST.todayOverride = 'rest';
     ST.lastOverrideDate = today();
   } else {
-    // Permanently shift startDate so today = chosen split
-    // and ALL future days recalculate correctly from this anchor
     const targetIdx = CYCLE.indexOf(val);
     const newStart = parseLocal(today());
     newStart.setDate(newStart.getDate() - targetIdx);
@@ -1752,7 +1735,7 @@ function showToast(msg) {
 // ════════════════════════════════════════════════════════
 loadState().then(data => {
   ST = data;
-  ST_LOADED = true; // now safe to save
+  ST_LOADED = true;
   applyTheme();
   renderHome();
   setSyncDot('green');
