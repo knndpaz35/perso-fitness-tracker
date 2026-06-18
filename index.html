@@ -353,8 +353,6 @@ body {
 .log-sub { font-size: 11px; color: var(--ink3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.4px; }
 .set-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 10px; }
 .set-toolbar .add-set { margin-top: 0; flex: 1; }
-.set-help { border: 1px solid var(--border2); background: var(--surface2); color: var(--ink2); border-radius: 999px; padding: 8px 12px; font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; }
-.set-help:hover { background: var(--bg3); color: var(--ink); }
 .acc { margin: 12px 0 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg2); }
 .acc summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.5px; }
 .acc summary::-webkit-details-marker { display: none; }
@@ -1097,6 +1095,24 @@ function getLastSessionEntry(exId) {
   return null;
 }
 
+function getConsistencyStartDate() {
+  const completedDates = Object.keys(ST.logs || {}).filter(d => ST.logs[d]?.completed).sort();
+  if (completedDates.length) return parseLocal(completedDates[0]);
+  return parseLocal(ST.startDate || today());
+}
+
+function formatConsistency(days) {
+  if (days >= 30) {
+    const months = Math.max(1, Math.floor(days / 30));
+    return `You are ${months} month${months === 1 ? '' : 's'} consistently working out!`;
+  }
+  if (days >= 7) {
+    const weeks = Math.max(1, Math.floor(days / 7));
+    return `You are ${weeks} week${weeks === 1 ? '' : 's'} consistently working out!`;
+  }
+  return `You are ${days} day${days === 1 ? '' : 's'} consistently working out!`;
+}
+
 function displaySetWeight(set, exId) {
   if (!set || set.weight === '' || set.weight === null || set.weight === undefined) return '';
   const unit = set.unit || getExUnit(exId);
@@ -1500,13 +1516,32 @@ function buildCard(ex, log, dateStr, split) {
       <span class="ex-chev">›</span>
     </div>
     <div class="ex-body">
+      <details class="acc" id="howto-${ex.id}">
+        <summary>How to perform <span>show / hide</span></summary>
+        <div class="acc-body">
+          <div class="howto-def">${ex.def}</div>
+        </div>
+      </details>
+      <details class="acc" id="video-${ex.id}" style="margin-top:10px;">
+        <summary>Video tutorial <span>show / hide</span></summary>
+        <div class="acc-body">
+          <div class="yt-wrap" id="yt-${ex.id}" onclick="loadYT('${ex.id}','${ex.yt}')">
+            <img class="yt-thumb" src="https://img.youtube.com/vi/${ex.yt}/mqdefault.jpg" alt="Exercise video thumbnail" loading="lazy">
+            <div class="yt-play-btn">
+              <div class="yt-play-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="yt-label">▶ Tap to play — YouTube tutorial for proper form</div>
+        </div>
+      </details>
       <div class="log-shell">
         <div class="log-head">
           <div>
             <div class="log-title">Log Sets</div>
             <div class="log-sub">Open first, then add or fill sets</div>
           </div>
-          <button class="set-help" type="button" onclick="toggleDetails('howto-${ex.id}')">How to perform</button>
         </div>
         ${refHtml}
         <div class="sets-hd">
@@ -1530,26 +1565,6 @@ function buildCard(ex, log, dateStr, split) {
             <button class="fb-btn fb-hard ${exLog.feedback==='hard'?'sel':''}" onclick="saveFb('${dateStr}','${ex.id}','hard')">🔥 Hard</button>
           </div>
         </div>
-        <details class="acc" id="howto-${ex.id}">
-          <summary>How to perform <span>show / hide</span></summary>
-          <div class="acc-body">
-            <div class="howto-def">${ex.def}</div>
-          </div>
-        </details>
-        <details class="acc" id="video-${ex.id}" style="margin-top:10px;">
-          <summary>Video tutorial <span>show / hide</span></summary>
-          <div class="acc-body">
-            <div class="yt-wrap" id="yt-${ex.id}" onclick="loadYT('${ex.id}','${ex.yt}')">
-              <img class="yt-thumb" src="https://img.youtube.com/vi/${ex.yt}/mqdefault.jpg" alt="Exercise video thumbnail" loading="lazy">
-              <div class="yt-play-btn">
-                <div class="yt-play-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-                </div>
-              </div>
-            </div>
-            <div class="yt-label">▶ Tap to play — YouTube tutorial for proper form</div>
-          </div>
-        </details>
       </div>
     </div>
   </div>`;
@@ -1807,13 +1822,11 @@ function renderProgress() {
   const pills = document.getElementById('pr-pills');
   const activeId = pills.querySelector('.prp.active')?.dataset.id || allExes[0]?.id;
   pills.innerHTML = allExes.map(e => `<button class="prp ${e.id===activeId?'active':''}" data-id="${e.id}" onclick="selectPr('${e.id}')">${e.name.split(' ').slice(0,3).join(' ')}</button>`).join('');
-  const start = parseLocal(ST.startDate);
+  const start = getConsistencyStartDate();
   const now = new Date();
   const days = Math.max(1, Math.floor((now - start) / 86400000) + 1);
-  const weeks = Math.floor(days / 7);
-  const months = Math.floor(days / 30.4375);
   const ageEl = document.getElementById('progress-age');
-  if (ageEl) ageEl.innerHTML = `<strong>${days} day${days===1?'':'s'}</strong> · ${weeks} week${weeks===1?'':'s'} · ${months} month${months===1?'':'s'}`;
+  if (ageEl) ageEl.textContent = formatConsistency(days);
   renderPrChart(activeId);
 }
 function selectPr(id) {
