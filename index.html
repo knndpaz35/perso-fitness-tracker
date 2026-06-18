@@ -347,28 +347,36 @@ body {
 
 .ex-body { display: none; border-top: 1px solid var(--border); }
 .ex-card.open .ex-body { display: block; }
-
-/* TABS inside card */
-.ex-tabs { display: flex; border-bottom: 1px solid var(--border); }
-.ex-tab {
-  flex: 1;
-  padding: 10px;
-  border: none;
+.log-shell { padding: 14px 16px 16px; }
+.log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.log-title { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; }
+.log-sub { font-size: 11px; color: var(--ink3); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.4px; }
+.set-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 10px; }
+.set-toolbar .add-set { margin-top: 0; flex: 1; }
+.set-help { border: 1px solid var(--border2); background: var(--surface2); color: var(--ink2); border-radius: 999px; padding: 8px 12px; font-family: 'Barlow', sans-serif; font-size: 11px; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; }
+.set-help:hover { background: var(--bg3); color: var(--ink); }
+.acc { margin: 12px 0 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--bg2); }
+.acc summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; letter-spacing: 0.5px; }
+.acc summary::-webkit-details-marker { display: none; }
+.acc summary span { color: var(--ink3); font-family: 'DM Mono', monospace; font-size: 10px; }
+.acc-body { padding: 12px; border-top: 1px solid var(--border); }
+.acc.open { background: var(--surface); }
+.acc .howto-def { margin-bottom: 0; }
+.acc .yt-wrap { margin-bottom: 0; }
+.set-row { display: grid; grid-template-columns: 28px minmax(0,1fr) minmax(0,1fr) auto; gap: 6px; margin-bottom: 7px; align-items: center; }
+.remove-set {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
   background: transparent;
-  font-family: 'Barlow', sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink3);
+  color: var(--ink2);
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 16px;
+  line-height: 1;
   transition: all 0.15s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
 }
-.ex-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.ex-tab-pane { display: none; padding: 14px 16px; }
-.ex-tab-pane.active { display: block; }
+.remove-set:hover { border-color: var(--accent2); color: var(--accent2); background: rgba(255,77,109,0.08); }
 
 /* HOW-TO */
 .howto-def {
@@ -688,6 +696,25 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
 @media(max-width:380px) { .nb { padding: 5px 9px; font-size: 12px; } .topbar { padding: 0 12px; } .page { padding: 16px 13px 80px; } }
 @media(min-width:900px) { .page { padding-left: 22px; padding-right: 22px; } }
+@media(max-width:560px) {
+  .topbar { height: auto; min-height: 56px; padding-top: 10px; padding-bottom: 10px; gap: 10px; align-items: flex-start; }
+  .topbar-right { width: 100%; justify-content: space-between; flex-wrap: wrap; }
+  .nav { width: 100%; justify-content: space-between; }
+  .logo { font-size: 24px; }
+  .override-row { align-items: stretch; }
+  .override-actions { width: 100%; flex-direction: column; align-items: stretch; }
+  .split-sel, .undo-sel { width: 100%; }
+  .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .set-row { grid-template-columns: 1fr; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .set-row:last-child { border-bottom: none; }
+  .set-n { text-align: left; }
+  .set-field-top { flex-wrap: wrap; }
+  .fill-btn { width: 100%; }
+  .remove-set { width: 100%; height: 36px; }
+  .log-shell { padding: 12px 12px 14px; }
+  .set-toolbar { flex-direction: column; align-items: stretch; }
+  .set-toolbar .add-set { width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -1457,11 +1484,11 @@ function buildCard(ex, log, dateStr, split) {
         </div>
         <input id="reps-${ex.id}-${i}" type="number" class="set-inp" inputmode="numeric" placeholder="${phR}" min="1" step="1" value="${s.reps||''}" onchange="saveSet('${dateStr}','${ex.id}',${i},'reps',this.value)">
       </div>
+      <button class="remove-set" title="Remove set" onclick="removeSet('${dateStr}','${ex.id}',${i})">×</button>
     </div>`;
   }).join('');
 
   const failChk = exLog.failure ? 'checked' : '';
-  const fbMap = { easy: 'fb-easy', ok: 'fb-ok', hard: 'fb-hard' };
 
   return `<div class="ex-card ${isDone?'done':''}" id="exc-${ex.id}" style="--split-c:${splitC}">
     <div class="ex-top" onclick="toggleCard('${ex.id}')">
@@ -1473,26 +1500,14 @@ function buildCard(ex, log, dateStr, split) {
       <span class="ex-chev">›</span>
     </div>
     <div class="ex-body">
-      <div class="ex-tabs">
-        <button class="ex-tab active" onclick="switchTab('${ex.id}','howto',this)">How To</button>
-        <button class="ex-tab" onclick="switchTab('${ex.id}','video',this)">Video</button>
-        <button class="ex-tab" onclick="switchTab('${ex.id}','log',this)">Log Sets</button>
-      </div>
-      <div class="ex-tab-pane active" id="tp-howto-${ex.id}">
-        <div class="howto-def">${ex.def}</div>
-      </div>
-      <div class="ex-tab-pane" id="tp-video-${ex.id}">
-        <div class="yt-wrap" id="yt-${ex.id}" onclick="loadYT('${ex.id}','${ex.yt}')">
-          <img class="yt-thumb" src="https://img.youtube.com/vi/${ex.yt}/mqdefault.jpg" alt="Exercise video thumbnail" loading="lazy">
-          <div class="yt-play-btn">
-            <div class="yt-play-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
-            </div>
+      <div class="log-shell">
+        <div class="log-head">
+          <div>
+            <div class="log-title">Log Sets</div>
+            <div class="log-sub">Open first, then add or fill sets</div>
           </div>
+          <button class="set-help" type="button" onclick="toggleDetails('howto-${ex.id}')">How to perform</button>
         </div>
-        <div class="yt-label">▶ Tap to play — YouTube tutorial for proper form</div>
-      </div>
-      <div class="ex-tab-pane" id="tp-log-${ex.id}">
         ${refHtml}
         <div class="sets-hd">
           <span class="shd"></span>
@@ -1500,7 +1515,9 @@ function buildCard(ex, log, dateStr, split) {
           <span class="shd">Reps</span>
         </div>
         <div id="set-rows-${ex.id}">${setRows}</div>
-        <button class="add-set" onclick="addSet('${dateStr}','${ex.id}')">+ Add Set</button>
+        <div class="set-toolbar">
+          <button class="add-set" onclick="addSet('${dateStr}','${ex.id}')">+ Add Set</button>
+        </div>
         <div class="fail-row">
           <input type="checkbox" id="fail-${ex.id}" ${failChk} onchange="saveFailure('${dateStr}','${ex.id}',this.checked)">
           <label for="fail-${ex.id}" class="fail-lbl">Last set taken <strong>to failure</strong></label>
@@ -1513,6 +1530,26 @@ function buildCard(ex, log, dateStr, split) {
             <button class="fb-btn fb-hard ${exLog.feedback==='hard'?'sel':''}" onclick="saveFb('${dateStr}','${ex.id}','hard')">🔥 Hard</button>
           </div>
         </div>
+        <details class="acc" id="howto-${ex.id}">
+          <summary>How to perform <span>show / hide</span></summary>
+          <div class="acc-body">
+            <div class="howto-def">${ex.def}</div>
+          </div>
+        </details>
+        <details class="acc" id="video-${ex.id}" style="margin-top:10px;">
+          <summary>Video tutorial <span>show / hide</span></summary>
+          <div class="acc-body">
+            <div class="yt-wrap" id="yt-${ex.id}" onclick="loadYT('${ex.id}','${ex.yt}')">
+              <img class="yt-thumb" src="https://img.youtube.com/vi/${ex.yt}/mqdefault.jpg" alt="Exercise video thumbnail" loading="lazy">
+              <div class="yt-play-btn">
+                <div class="yt-play-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </div>
+            </div>
+            <div class="yt-label">▶ Tap to play — YouTube tutorial for proper form</div>
+          </div>
+        </details>
       </div>
     </div>
   </div>`;
@@ -1532,8 +1569,23 @@ function loadYT(exId, ytId) {
   wrap.innerHTML = `<iframe class="yt-iframe" src="https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
 }
 
+function toggleDetails(id) {
+  const el = document.getElementById(id);
+  if (el) el.open = !el.open;
+}
+
 function toggleCard(id) {
   document.getElementById(`exc-${id}`).classList.toggle('open');
+}
+
+function removeSet(dateStr, exId, idx) {
+  const exLog = getExLog(dateStr, exId);
+  if (idx < 0 || idx >= exLog.sets.length) return;
+  exLog.sets.splice(idx, 1);
+  exLog.done = false;
+  syncExerciseCompletion(dateStr, exId);
+  saveState();
+  if (dateStr === today()) renderHome();
 }
 
 function saveSet(dateStr, exId, idx, field, val) {
