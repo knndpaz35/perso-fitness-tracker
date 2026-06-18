@@ -136,6 +136,7 @@ body {
 /* ── PAGES ───────────────────────────────────────────── */
 .pages { flex: 1; overflow: hidden; position: relative; }
 .page { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 100px; display: none; }
+.page { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 100px; display: none; width: 100%; max-width: 1120px; left: 50%; transform: translateX(-50%); }
 .page.active { display: block; }
 
 /* ── DAY SLIDER ──────────────────────────────────────── */
@@ -198,6 +199,7 @@ body {
 }
 
 /* ── SPLIT OVERRIDE ──────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(110px,1fr)); gap: 8px; margin-bottom: 20px; }
 .override-row {
   display: flex;
   align-items: center;
@@ -212,6 +214,7 @@ body {
 }
 .override-txt { font-size: 13px; color: var(--ink2); }
 .override-txt strong { color: var(--ink); }
+.override-actions { display: flex; align-items: center; gap: 8px; }
 .split-sel {
   background: var(--bg2);
   border: 1px solid var(--border2);
@@ -440,6 +443,7 @@ body {
 }
 .sets-hd { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; margin-bottom: 6px; }
 .shd { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.5px; }
+.undo-sel { display: none; }
 .set-row { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; margin-bottom: 7px; align-items: center; }
 .set-n {
   font-family: 'Barlow Condensed', sans-serif;
@@ -448,6 +452,25 @@ body {
   color: var(--accent);
   text-align: center;
 }
+.set-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.set-field-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.set-field-lbl { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.5px; }
+.fill-btn {
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--ink2);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.fill-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
 .set-inp {
   background: var(--bg2);
   border: 1px solid var(--border2);
@@ -622,9 +645,12 @@ body {
 }
 .prp.active { background: var(--accent); color: #0c0c0e; border-color: var(--accent); }
 .prp:hover:not(.active) { background: var(--surface2); color: var(--ink); }
+.set-head-note { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.5px; }
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
 .cc-title { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .cc-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ink3); margin-bottom: 14px; }
+.progress-age { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 18px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink2); font-family: 'DM Mono', monospace; font-size: 11px; }
+.progress-age strong { color: var(--ink); }
 .hist-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
 .hist-tbl th { text-align: left; padding: 6px 8px; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
 .hist-tbl td { padding: 9px 8px; border-bottom: 1px solid var(--border); color: var(--ink); }
@@ -661,6 +687,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 2px; }
 @media(max-width:380px) { .nb { padding: 5px 9px; font-size: 12px; } .topbar { padding: 0 12px; } .page { padding: 16px 13px 80px; } }
+@media(min-width:900px) { .page { padding-left: 22px; padding-right: 22px; } }
 </style>
 </head>
 <body>
@@ -689,15 +716,18 @@ body {
 
   <div class="override-row">
     <div class="override-txt">Today: <strong id="ov-current">—</strong></div>
-    <select class="split-sel" id="split-sel" onchange="overrideSplit(this.value)">
-      <option value="">Switch today's split →</option>
-      <option value="push">Push Day</option>
-      <option value="pull">Pull Day</option>
-      <option value="legs">Legs / Glutes</option>
-      <option value="upper">Upper Body</option>
-      <option value="lower">Lower / Glutes</option>
-      <option value="rest">Rest Day</option>
-    </select>
+    <div class="override-actions">
+      <select class="split-sel" id="split-sel" onchange="overrideSplit(this.value)">
+        <option value="">Switch today's split →</option>
+        <option value="push">Push Day</option>
+        <option value="pull">Pull Day</option>
+        <option value="legs">Legs / Glutes</option>
+        <option value="upper">Upper Body</option>
+        <option value="lower">Lower / Glutes</option>
+        <option value="rest">Rest Day</option>
+      </select>
+      <button class="btn undo-sel" id="undo-split-btn" onclick="undoSplit()">Undo split</button>
+    </div>
   </div>
 
   <div class="suggest" id="suggest">
@@ -761,6 +791,7 @@ body {
 <div class="page" id="pg-prog">
   <div class="ptitle">Progress</div>
   <div class="psub">Track your strength gains over time.</div>
+  <div class="progress-age" id="progress-age"></div>
   <div class="pr-pills" id="pr-pills"></div>
   <div id="pr-content"></div>
 </div>
@@ -779,8 +810,7 @@ body {
 // EXERCISE DATA + YOUTUBE IDS
 // ════════════════════════════════════════════════════════
 // Cycle: push=0, pull=1, legs=2, upper=3, lower=4, rest=5, rest=6
-// User is on Upper Body today → that's index 3 in the cycle.
-// We set startDate so that today maps to index 3.
+// Fresh installs start on the first rest day.
 const CYCLE = ['push','pull','legs','upper','lower','rest','rest'];
 
 const SNAME = {push:'Push Day',pull:'Pull Day',legs:'Legs / Glutes',upper:'Upper Body',lower:'Lower / Glutes',rest:'Rest Day'};
@@ -871,8 +901,10 @@ const USER_ID = 'perso-fitness-tracker';
 const KEY = 'lift_v1';
 
 function initState() {
+  const d = new Date();
+  d.setDate(d.getDate() - 5);
   return {
-    startDate: ds(new Date()),
+    startDate: ds(d),
     logs: {}, streak: 0, sessions: 0, prs: {},
     unit: 'kg', theme: 'dark',
     todayOverride: null, lastOverrideDate: null,
@@ -883,7 +915,7 @@ function initState() {
 function normalizeState(s) {
   if (typeof s === 'string') { try { s = JSON.parse(s); } catch(e) { return initState(); } }
   if (!s || typeof s !== 'object') return initState();
-  if (!s.startDate) s.startDate = ds(new Date());
+  if (!s.startDate) { const d = new Date(); d.setDate(d.getDate() - 5); s.startDate = ds(d); }
   if (!s.logs) s.logs = {};
   if (typeof s.streak !== 'number') s.streak = 0;
   if (typeof s.sessions !== 'number') s.sessions = 0;
@@ -1013,6 +1045,86 @@ function getExLog(dateStr, id) {
   const l = getLog(dateStr);
   if (!l.exercises[id]) l.exercises[id] = { sets: [], feedback: null, done: false, failure: false };
   return l.exercises[id];
+}
+
+function findExercise(exId) {
+  for (const arr of Object.values(EX)) {
+    const ex = arr.find(item => item.id === exId);
+    if (ex) return ex;
+  }
+  return null;
+}
+
+function getDefaultSetCount(exId) {
+  const ex = findExercise(exId);
+  return ex ? (parseInt(ex.target.split('×')[0].trim()) || 3) : 3;
+}
+
+function getLastSessionEntry(exId) {
+  const t = today();
+  const dates = Object.keys(ST.logs).filter(d => d < t).sort().reverse();
+  for (const d of dates) {
+    const exLog = ST.logs[d].exercises?.[exId];
+    if (exLog?.sets?.some(s => s.weight || s.reps)) return { date: d, log: exLog };
+  }
+  return null;
+}
+
+function displaySetWeight(set, exId) {
+  if (!set || set.weight === '' || set.weight === null || set.weight === undefined) return '';
+  const unit = set.unit || getExUnit(exId);
+  const weight = parseFloat(set.weight) || 0;
+  return unit === 'lbs' ? Math.round(weight * 2.20462 * 10) / 10 : weight;
+}
+
+function getFillValue(exId, idx, field) {
+  const lastSession = getLastSessionEntry(exId);
+  if (idx > 0) {
+    const prevValue = document.getElementById(`${field}-${exId}-${idx - 1}`)?.value || '';
+    if (prevValue) return prevValue;
+    const firstValue = document.getElementById(`${field}-${exId}-0`)?.value || '';
+    if (firstValue) return firstValue;
+  }
+  const currentValue = document.getElementById(`${field}-${exId}-${idx}`)?.value || '';
+  if (currentValue) return currentValue;
+  if (lastSession?.log?.sets?.length) {
+    const lastSet = lastSession.log.sets[idx] || lastSession.log.sets[0];
+    if (field === 'weight') return String(displaySetWeight(lastSet, exId) || '');
+    return String(lastSet?.reps ?? '');
+  }
+  return '';
+}
+
+function fillSetValue(dateStr, exId, idx, field) {
+  const input = document.getElementById(`${field}-${exId}-${idx}`);
+  if (!input) return;
+  const value = getFillValue(exId, idx, field);
+  if (value === '') return;
+  input.value = value;
+  saveSet(dateStr, exId, idx, field, value);
+}
+
+function syncExerciseCompletion(dateStr, exId) {
+  const log = getLog(dateStr);
+  const exLog = getExLog(dateStr, exId);
+  const defSets = getDefaultSetCount(exId);
+  const allPrescribedFilled = exLog.sets.length === defSets && exLog.sets.every(set => set.weight !== '' && set.reps !== '');
+  if (allPrescribedFilled) {
+    exLog.done = true;
+  } else if (exLog.sets.length > defSets) {
+    exLog.done = false;
+  }
+  const split = getSplit(dateStr);
+  const exes = EX[split] || [];
+  const allDone = exes.every(ex => log.exercises[ex.id]?.done);
+  if (allDone && !log.completed) {
+    log.completed = true;
+    ST.sessions++;
+    ST.streak++;
+    showToast('🎉 Workout complete! Session saved.');
+  } else if (!allDone) {
+    log.completed = false;
+  }
 }
 
 // ── UNIT HELPERS ──────────────────────────────────────
@@ -1154,19 +1266,18 @@ function overrideSplit(val) {
   if (!val) return;
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
-  if (val === 'rest') {
-    ST.todayOverride = 'rest';
-    ST.lastOverrideDate = today();
-  } else {
-    const targetIdx = CYCLE.indexOf(val);
-    const newStart = parseLocal(today());
-    newStart.setDate(newStart.getDate() - targetIdx);
-    ST.startDate = ds(newStart);
-    ST.todayOverride = null;
-    ST.lastOverrideDate = null;
-  }
+  ST.todayOverride = val;
+  ST.lastOverrideDate = today();
   saveState();
   showToast(`Schedule set — today is ${SNAME[val]}`);
+  renderHome();
+}
+
+function undoSplit() {
+  ST.todayOverride = null;
+  ST.lastOverrideDate = null;
+  saveState();
+  showToast('Split override undone');
   renderHome();
 }
 
@@ -1235,6 +1346,8 @@ function renderHome() {
   // Sync UI controls
   document.getElementById('ov-current').textContent = SNAME[split];
   document.getElementById('split-sel').value = '';
+  const undoBtn = document.getElementById('undo-split-btn');
+  if (undoBtn) undoBtn.style.display = ST.todayOverride && ST.lastOverrideDate === t ? 'inline-flex' : 'none';
 
   // Suggestion
   const miss = getMissedInfo();
@@ -1291,16 +1404,19 @@ function buildCard(ex, log, dateStr, split) {
 
   // Last session reference
   const lastSets = getLastSets(ex.id);
+  const lastSession = getLastSessionEntry(ex.id);
   let refHtml = '';
   if (lastSets && lastSets.some(s => s.weight)) {
     const pills = lastSets.filter(s => s.weight || s.reps).map((s, i) => {
       // Use the unit that was stored with that set, or fallback to this ex's current unit
       const setUnit = s.unit || 'kg';
-      const dw = s.weight ? (setUnit === 'lbs' ? Math.round(parseFloat(s.weight)*2.20462*10)/10 : parseFloat(s.weight)) : '?';
+      const dw = s.weight ? displaySetWeight(s, ex.id) : '?';
       const dispU = setUnit;
       return `<span class="ref-pill">S${i+1}: ${dw}${dispU} × ${s.reps || '?'}</span>`;
     }).join('');
-    refHtml = `<div class="last-ref show"><div class="ref-lbl">Last session — your target to match or beat</div><div class="ref-pills">${pills}</div></div>`;
+    const feelLabel = lastSession?.log?.feedback ? { easy: 'Easy', ok: 'Good', hard: 'Hard' }[lastSession.log.feedback] : 'Not set';
+    const failLabel = lastSession?.log?.failure ? 'Taken to failure' : 'Stopped in reserve';
+    refHtml = `<div class="last-ref show"><div class="ref-lbl">Last session — your target to match or beat</div><div class="ref-pills">${pills}</div><div class="ref-lbl" style="margin-top:8px;">Last feel: ${feelLabel} · ${failLabel}</div></div>`;
   }
 
   const defSets = parseInt(ex.target.split('×')[0].trim()) || 3;
@@ -1310,16 +1426,30 @@ function buildCard(ex, log, dateStr, split) {
     const dw = s.weight !== '' && s.weight !== undefined ? toDisplay(s.weight) : '';
     const phW = lastSets?.[i]?.weight ? toDisplay(lastSets[i].weight) : u;
     const phR = lastSets?.[i]?.reps || 'reps';
+    const weightBtn = i === 0 ? (lastSets ? 'same as last time?' : '') : 'same weight?';
+    const repBtn = i === 0 ? (lastSets ? 'same rep above?' : '') : 'same rep above?';
     return `<div class="set-row">
       <div class="set-n">S${i+1}</div>
-      <div class="weight-wrap">
-        <input type="number" class="set-inp" inputmode="decimal" placeholder="${phW||'0'}" min="0" step="0.5" value="${dw}" onchange="saveSet('${dateStr}','${ex.id}',${i},'weight',this.value)">
-        <select class="unit-sel" onchange="setUnit(this.value,'${ex.id}')">
-          <option value="kg" ${u==='kg'?'selected':''}>kg</option>
-          <option value="lbs" ${u==='lbs'?'selected':''}>lbs</option>
-        </select>
+      <div class="set-field">
+        <div class="set-field-top">
+          <span class="set-field-lbl">Weight (${u})</span>
+          ${weightBtn ? `<button class="fill-btn" onclick="fillSetValue('${dateStr}','${ex.id}',${i},'weight')">${weightBtn}</button>` : ''}
+        </div>
+        <div class="weight-wrap">
+          <input id="weight-${ex.id}-${i}" type="number" class="set-inp" inputmode="decimal" placeholder="${phW||'0'}" min="0" step="0.5" value="${dw}" onchange="saveSet('${dateStr}','${ex.id}',${i},'weight',this.value)">
+          <select class="unit-sel" onchange="setUnit(this.value,'${ex.id}')">
+            <option value="kg" ${u==='kg'?'selected':''}>kg</option>
+            <option value="lbs" ${u==='lbs'?'selected':''}>lbs</option>
+          </select>
+        </div>
       </div>
-      <input type="number" class="set-inp" inputmode="numeric" placeholder="${phR}" min="1" step="1" value="${s.reps||''}" onchange="saveSet('${dateStr}','${ex.id}',${i},'reps',this.value)">
+      <div class="set-field">
+        <div class="set-field-top">
+          <span class="set-field-lbl">Reps</span>
+          ${repBtn ? `<button class="fill-btn" onclick="fillSetValue('${dateStr}','${ex.id}',${i},'reps')">${repBtn}</button>` : ''}
+        </div>
+        <input id="reps-${ex.id}-${i}" type="number" class="set-inp" inputmode="numeric" placeholder="${phR}" min="1" step="1" value="${s.reps||''}" onchange="saveSet('${dateStr}','${ex.id}',${i},'reps',this.value)">
+      </div>
     </div>`;
   }).join('');
 
@@ -1416,6 +1546,7 @@ function saveSet(dateStr, exId, idx, field, val) {
   } else {
     exLog.sets[idx][field] = val;
   }
+  syncExerciseCompletion(dateStr, exId);
   saveState();
   if (dateStr === today()) updateStats();
 }
@@ -1424,6 +1555,7 @@ function addSet(dateStr, exId) {
   const exLog = getExLog(dateStr, exId);
   const idx = exLog.sets.length;
   exLog.sets.push({ weight: '', reps: '' });
+  exLog.done = false;
   saveState();
   const last = getLastSets(exId);
   const phW = last?.[idx]?.weight ? toDisplay(last[idx].weight) : '';
@@ -1433,15 +1565,29 @@ function addSet(dateStr, exId) {
   div.className = 'set-row';
   div.style.cssText = '';
   div.innerHTML = `<div class="set-n">S${idx+1}</div>
-    <div class="weight-wrap">
-      <input type="number" class="set-inp" inputmode="decimal" placeholder="${phW||'0'}" min="0" step="0.5" onchange="saveSet('${dateStr}','${exId}',${idx},'weight',this.value)">
-      <select class="unit-sel" onchange="setUnit(this.value,'${exId}')">
-        <option value="kg" ${getExUnit(exId)==='kg'?'selected':''}>kg</option>
-        <option value="lbs" ${getExUnit(exId)==='lbs'?'selected':''}>lbs</option>
-      </select>
+    <div class="set-field">
+      <div class="set-field-top">
+        <span class="set-field-lbl">Weight (${getExUnit(exId)})</span>
+        <button class="fill-btn" onclick="fillSetValue('${dateStr}','${exId}',${idx},'weight')">same weight?</button>
+      </div>
+      <div class="weight-wrap">
+        <input id="weight-${exId}-${idx}" type="number" class="set-inp" inputmode="decimal" placeholder="${phW||'0'}" min="0" step="0.5" onchange="saveSet('${dateStr}','${exId}',${idx},'weight',this.value)">
+        <select class="unit-sel" onchange="setUnit(this.value,'${exId}')">
+          <option value="kg" ${getExUnit(exId)==='kg'?'selected':''}>kg</option>
+          <option value="lbs" ${getExUnit(exId)==='lbs'?'selected':''}>lbs</option>
+        </select>
+      </div>
     </div>
-    <input type="number" class="set-inp" inputmode="numeric" placeholder="${phR}" min="1" step="1" onchange="saveSet('${dateStr}','${exId}',${idx},'reps',this.value)">`;
+    <div class="set-field">
+      <div class="set-field-top">
+        <span class="set-field-lbl">Reps</span>
+        <button class="fill-btn" onclick="fillSetValue('${dateStr}','${exId}',${idx},'reps')">same rep above?</button>
+      </div>
+      <input id="reps-${exId}-${idx}" type="number" class="set-inp" inputmode="numeric" placeholder="${phR}" min="1" step="1" onchange="saveSet('${dateStr}','${exId}',${idx},'reps',this.value)">
+    </div>`;
   container.appendChild(div);
+  syncExerciseCompletion(dateStr, exId);
+  if (dateStr === today()) updateStats();
 }
 
 function saveFailure(dateStr, exId, checked) {
@@ -1465,14 +1611,8 @@ function saveFb(dateStr, exId, fb) {
 function toggleDone(dateStr, exId) {
   const exLog = getExLog(dateStr, exId);
   exLog.done = !exLog.done;
-  const split = getSplit(dateStr);
-  const exes = EX[split] || [];
-  const log = getLog(dateStr);
-  const allDone = exes.every(e => log.exercises[e.id]?.done);
-  if (allDone && !log.completed) {
-    log.completed = true; ST.sessions++; ST.streak++;
-    saveState(); showToast('🎉 Workout complete! Session saved.');
-  } else { saveState(); }
+  syncExerciseCompletion(dateStr, exId);
+  saveState();
   renderHome();
 }
 
@@ -1608,6 +1748,13 @@ function renderProgress() {
   const pills = document.getElementById('pr-pills');
   const activeId = pills.querySelector('.prp.active')?.dataset.id || allExes[0]?.id;
   pills.innerHTML = allExes.map(e => `<button class="prp ${e.id===activeId?'active':''}" data-id="${e.id}" onclick="selectPr('${e.id}')">${e.name.split(' ').slice(0,3).join(' ')}</button>`).join('');
+  const start = parseLocal(ST.startDate);
+  const now = new Date();
+  const days = Math.max(1, Math.floor((now - start) / 86400000) + 1);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30.4375);
+  const ageEl = document.getElementById('progress-age');
+  if (ageEl) ageEl.innerHTML = `<strong>${days} day${days===1?'':'s'}</strong> · ${weeks} week${weeks===1?'':'s'} · ${months} month${months===1?'':'s'}`;
   renderPrChart(activeId);
 }
 function selectPr(id) {
