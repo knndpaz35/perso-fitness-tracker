@@ -1125,6 +1125,13 @@ function syncExerciseCompletion(dateStr, exId) {
   } else if (!allDone) {
     log.completed = false;
   }
+
+  const card = document.getElementById(`exc-${exId}`);
+  if (card) {
+    card.classList.toggle('done', !!exLog.done);
+    const chk = document.getElementById(`chk-${exId}`);
+    if (chk) chk.classList.toggle('done', !!exLog.done);
+  }
 }
 
 // ── UNIT HELPERS ──────────────────────────────────────
@@ -1458,7 +1465,7 @@ function buildCard(ex, log, dateStr, split) {
 
   return `<div class="ex-card ${isDone?'done':''}" id="exc-${ex.id}" style="--split-c:${splitC}">
     <div class="ex-top" onclick="toggleCard('${ex.id}')">
-      <button class="ex-chk ${isDone?'done':''}" onclick="event.stopPropagation();toggleDone('${dateStr}','${ex.id}')">✓</button>
+      <button class="ex-chk ${isDone?'done':''}" id="chk-${ex.id}" onclick="event.stopPropagation();toggleDone('${dateStr}','${ex.id}')">✓</button>
       <div class="ex-info">
         <div class="ex-name">${ex.name}</div>
         <div class="ex-meta">${ex.target} · ${ex.muscles}</div>
