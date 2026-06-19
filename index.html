@@ -961,6 +961,10 @@ function normalizeState(s) {
 
 let ST_LOADED = false;
 
+function hasWorkoutData(s) {
+  return !!(s && typeof s === 'object' && s.logs && Object.keys(s.logs).length > 0);
+}
+
 async function saveState() {
   if (!ST_LOADED) return;
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
@@ -1020,6 +1024,12 @@ function setSyncDot(color) {
 
 // Load — fetches from Supabase, falls back to localStorage if offline
 async function loadState() {
+  let localState = null;
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) localState = normalizeState(JSON.parse(raw));
+  } catch(e) {}
+
   try {
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${USER_ID}&select=data`,
@@ -1035,17 +1045,16 @@ async function loadState() {
       let raw = rows[0].data;
       if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch(e) { raw = null; } }
       const s = normalizeState(raw);
-      localStorage.setItem(KEY, JSON.stringify(s));
-      return s;
+      if (hasWorkoutData(s) || !hasWorkoutData(localState)) {
+        localStorage.setItem(KEY, JSON.stringify(s));
+        return s;
+      }
+      return localState;
     }
   } catch(e) { console.log('Could not reach Supabase - using local data'); }
 
   // Fallback to localStorage
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return normalizeState(JSON.parse(raw));
-  } catch(e) {}
-
+  if (localState) return localState;
   return initState();
 }
 
