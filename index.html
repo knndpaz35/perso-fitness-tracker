@@ -967,9 +967,27 @@ function hasWorkoutData(s) {
 
 async function saveState() {
   if (!ST_LOADED) return;
+
+  // SAFETY NET: never push an empty state over a non-empty backup.
+  // If this save would wipe out logs that previously existed, block it
+  // and warn loudly instead of silently destroying remote data.
+  if (!hasWorkoutData(ST)) {
+    try {
+      const prevRaw = localStorage.getItem(KEY);
+      const prev = prevRaw ? normalizeState(JSON.parse(prevRaw)) : null;
+      if (hasWorkoutData(prev)) {
+        console.warn('Blocked saveState: current ST has no logs but a previous non-empty state exists. Refusing to overwrite.');
+        setSyncDot('red');
+        return;
+      }
+    } catch(e) {}
+  }
+
   try { localStorage.setItem(KEY, JSON.stringify(ST)); } catch(e) {}
   setSyncDot('yellow');
-  const dataStr = JSON.stringify(ST);
+  // IMPORTANT: send ST as a real object, not a pre-stringified string.
+  // Double-stringifying here previously caused Supabase to store an
+  // escaped JSON string, which broke parsing on reload.
   try {
     const patchRes = await fetch(
       `${SUPABASE_URL}/rest/v1/workout_logs?user_id=eq.${USER_ID}`,
@@ -981,7 +999,7 @@ async function saveState() {
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ data: dataStr })
+        body: JSON.stringify({ data: ST })
       }
     );
     if (patchRes.status === 204 || patchRes.status === 200) {
@@ -999,7 +1017,7 @@ async function saveState() {
           'Authorization': `Bearer ${SUPABASE_KEY}`,
           'Prefer': 'return=minimal'
         },
-        body: JSON.stringify({ user_id: USER_ID, data: dataStr })
+        body: JSON.stringify({ user_id: USER_ID, data: ST })
       }
     );
     if (postRes.ok) { setSyncDot('green'); return; }
@@ -1045,11 +1063,26 @@ async function loadState() {
       let raw = rows[0].data;
       if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch(e) { raw = null; } }
       const s = normalizeState(raw);
-      if (hasWorkoutData(s) || !hasWorkoutData(localState)) {
+
+      // Decide which copy to trust:
+      // - If remote has data, prefer remote (it's the source of truth across devices).
+      // - If remote is empty but local has data, NEVER let the empty remote win —
+      //   this is exactly the bug that wiped logs before. Keep local and
+      //   immediately re-push it to Supabase to repair the remote copy.
+      if (hasWorkoutData(s)) {
         localStorage.setItem(KEY, JSON.stringify(s));
         return s;
       }
-      return localState;
+      if (hasWorkoutData(localState)) {
+        console.warn('Supabase returned empty state but local has data — keeping local and repairing remote.');
+        ST = localState;
+        ST_LOADED = true;
+        saveState(); // repair the remote row
+        return localState;
+      }
+      // Both empty — fine to use whichever (prefer remote shape)
+      localStorage.setItem(KEY, JSON.stringify(s));
+      return s;
     }
   } catch(e) { console.log('Could not reach Supabase - using local data'); }
 
