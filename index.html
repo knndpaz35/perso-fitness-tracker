@@ -436,6 +436,16 @@ body {
   display: none;
 }
 .last-ref.show { display: block; }
+.ref-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ref-unit-toggle { display: flex; gap: 2px; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; padding: 2px; flex-shrink: 0; }
+.ref-unit-btn {
+  border: none; background: transparent; color: var(--ink3);
+  font-family: 'DM Mono', monospace; font-size: 9px; font-weight: 600;
+  letter-spacing: 0.4px; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 4px; cursor: pointer; transition: all 0.15s;
+}
+.ref-unit-btn.active { background: var(--accent); color: #0c0c0e; }
+.ref-unit-btn:hover:not(.active) { color: var(--ink); }
 .ref-lbl { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .ref-pills { display: flex; flex-wrap: wrap; gap: 5px; }
 .ref-pill {
@@ -1172,14 +1182,12 @@ function formatConsistency(days) {
   return `You are ${days} day${days === 1 ? '' : 's'} consistently working out!`;
 }
 
-function displaySetWeight(set, exId) {
+function displaySetWeight(set, exId, unitOverride) {
   if (!set || set.weight === '' || set.weight === null || set.weight === undefined) return '';
-  // Weight is always stored canonically in kg; always render it in whichever
-  // unit is currently selected for this exercise, regardless of which unit
-  // it was originally logged in. This way switching the unit toggle converts
-  // ALL displays for this exercise — current sets, last-session reference,
-  // history, and progress — not just the input box.
-  const unit = getExUnit(exId);
+  // Weight is always stored canonically in kg; render it in whichever unit
+  // is requested. If no explicit unit is passed, fall back to whichever
+  // unit is currently selected for this exercise.
+  const unit = unitOverride || getExUnit(exId);
   const weight = parseFloat(set.weight) || 0;
   return unit === 'lbs' ? Math.round(weight * 2.20462 * 10) / 10 : weight;
 }
@@ -1251,17 +1259,41 @@ function toKg(val) {
   if (val === '' || val === null || val === undefined) return '';
   return ST.unit === 'lbs' ? Math.round(parseFloat(val) / 2.20462 * 100) / 100 : parseFloat(val);
 }
+// Transient (not saved) preview-unit override for the "Last session" box,
+// independent from the actual input/logging unit. Resets on page reload.
+let refUnitOverride = {};
+
 function setUnit(u, exId) {
   // Save unit per-exercise in state
   if (!ST.exUnits) ST.exUnits = {};
   ST.exUnits[exId] = u;
   saveState();
+  // Default the last-session preview back to following the new unit, until
+  // toggled independently again.
+  delete refUnitOverride[exId];
 
   // Re-render this card from canonical (kg) storage so every weight shown —
   // current sets, placeholders, and the "Last session" reference — converts
   // exactly to the new unit. (Patching displayed values in place previously
   // caused tiny rounding drift if you flipped the unit back and forth, and
   // didn't touch the last-session reference at all.)
+  const card = document.getElementById('exc-' + exId);
+  if (!card) return;
+  const wasOpen = card.classList.contains('open');
+  const ex = findExercise(exId);
+  if (!ex) return;
+  const dateStr = today();
+  const log = getLog(dateStr);
+  const split = getSplit(dateStr);
+  card.outerHTML = buildCard(ex, log, dateStr, split);
+  const newCard = document.getElementById('exc-' + exId);
+  if (newCard && wasOpen) newCard.classList.add('open');
+}
+
+function toggleRefUnit(exId, newU) {
+  // Flip just the "Last session" preview to a different unit, without
+  // touching the unit you're actually logging today's sets in.
+  refUnitOverride[exId] = newU;
   const card = document.getElementById('exc-' + exId);
   if (!card) return;
   const wasOpen = card.classList.contains('open');
@@ -1513,13 +1545,28 @@ function buildCard(ex, log, dateStr, split) {
   const lastSession = getLastSessionEntry(ex.id);
   let refHtml = '';
   if (lastSets && lastSets.some(s => s.weight)) {
+    // refU is just a preview unit for this box — it defaults to the
+    // exercise's current unit but can be flipped independently (e.g. to
+    // quickly check what your kg log looks like in lbs at a different gym)
+    // without changing the unit you're actually logging today's sets in.
+    const refU = refUnitOverride[ex.id] || u;
     const pills = lastSets.filter(s => s.weight || s.reps).map((s, i) => {
-      const dw = s.weight ? displaySetWeight(s, ex.id) : '?';
-      return `<span class="ref-pill">S${i+1}: ${dw}${s.weight?u:''} × ${s.reps || '?'}</span>`;
+      const dw = s.weight ? displaySetWeight(s, ex.id, refU) : '?';
+      return `<span class="ref-pill">S${i+1}: ${dw}${s.weight?refU:''} × ${s.reps || '?'}</span>`;
     }).join('');
     const feelLabel = lastSession?.log?.feedback ? { easy: 'Easy', ok: 'Good', hard: 'Hard' }[lastSession.log.feedback] : 'Not set';
     const failLabel = lastSession?.log?.failure ? 'Taken to failure' : 'Stopped in reserve';
-    refHtml = `<div class="last-ref show"><div class="ref-lbl">Last session — your target to match or beat</div><div class="ref-pills">${pills}</div><div class="ref-lbl" style="margin-top:8px;">Last feel: ${feelLabel} · ${failLabel}</div></div>`;
+    refHtml = `<div class="last-ref show">
+      <div class="ref-top">
+        <div class="ref-lbl" style="margin-bottom:0;">Last session — your target to match or beat</div>
+        <div class="ref-unit-toggle">
+          <button class="ref-unit-btn ${refU==='kg'?'active':''}" onclick="toggleRefUnit('${ex.id}','kg')">kg</button>
+          <button class="ref-unit-btn ${refU==='lbs'?'active':''}" onclick="toggleRefUnit('${ex.id}','lbs')">lbs</button>
+        </div>
+      </div>
+      <div class="ref-pills">${pills}</div>
+      <div class="ref-lbl" style="margin-top:8px;">Last feel: ${feelLabel} · ${failLabel}</div>
+    </div>`;
   }
 
   const defSets = parseInt(ex.target.split('×')[0].trim()) || 3;
