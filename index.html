@@ -1183,9 +1183,50 @@ function getLastSessionEntry(exId) {
 }
 
 function getConsistencyStartDate() {
-  const completedDates = Object.keys(ST.logs || {}).filter(d => ST.logs[d]?.completed).sort();
-  if (completedDates.length) return parseLocal(completedDates[0]);
-  return parseLocal(ST.startDate || today());
+  // The "consistently working out" stat should reflect your current unbroken
+  // streak — it must reset at the most recent missed (scheduled but not
+  // completed) workout day, not just count raw calendar days since you
+  // installed the app or since your very first-ever completed session.
+  const t = today();
+  const genesis = parseLocal(ST.startDate || t);
+  let streakStart = parseLocal(t); // default: nothing earlier counts yet
+  let cursor = parseLocal(t);
+  cursor.setDate(cursor.getDate() - 1);
+  while (cursor >= genesis) {
+    const dstr = ds(cursor);
+    const split = getSplit(dstr);
+    if (split !== 'rest') {
+      const log = ST.logs[dstr];
+      if (log?.completed) {
+        streakStart = new Date(cursor); // extend the streak back through this day
+      } else {
+        break; // missed day — the streak doesn't reach back any further
+      }
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streakStart;
+}
+
+function computeCurrentStreak() {
+  // Number of consecutive scheduled workout days completed without a miss,
+  // counting back from today. Rest days don't count and don't break it.
+  const t = today();
+  const genesis = parseLocal(ST.startDate || t);
+  let count = ST.logs[t]?.completed ? 1 : 0;
+  let cursor = parseLocal(t);
+  cursor.setDate(cursor.getDate() - 1);
+  while (cursor >= genesis) {
+    const dstr = ds(cursor);
+    const split = getSplit(dstr);
+    if (split !== 'rest') {
+      const log = ST.logs[dstr];
+      if (log?.completed) count++;
+      else break;
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return count;
 }
 
 function formatConsistency(days) {
@@ -1533,7 +1574,7 @@ function renderHome() {
   // Stats
   const doneCount = exes.filter(e => log.exercises[e.id]?.done).length;
   document.getElementById('s-done').textContent = `${doneCount}/${exes.length}`;
-  document.getElementById('s-streak').textContent = ST.streak;
+  document.getElementById('s-streak').textContent = computeCurrentStreak();
   document.getElementById('s-total').textContent = ST.sessions;
   document.getElementById('sec-lbl').textContent = SNAME[split];
 
