@@ -89,17 +89,35 @@ body {
 
 /* INLINE UNIT SELECT inside weight input */
 .weight-wrap { position: relative; display: flex; align-items: stretch; }
-.weight-wrap .set-inp { padding-right: 48px; width: 100%; border-radius: 7px; }
+.weight-wrap .set-inp { padding-right: 54px; width: 100%; border-radius: 7px; }
 .unit-sel {
-  position: absolute; right: 0; top: 0; bottom: 0; width: 44px;
-  background: var(--bg3); border: none; border-left: 1px solid var(--border2);
-  border-radius: 0 7px 7px 0; color: var(--ink2);
-  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600;
+  position: absolute; right: 5px; top: 5px; bottom: 5px; width: 42px;
+  background-color: var(--bg3);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'><path d='M1 1l3 3 3-3' stroke='%23f0ff44' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 7px 4px;
+  border: 1px solid var(--border2);
+  border-radius: 6px; color: var(--ink);
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700;
   cursor: pointer; outline: none; -webkit-appearance: none; appearance: none;
   letter-spacing: 0.3px; text-align: center; text-align-last: center;
-  transition: color 0.15s;
+  padding-right: 11px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  transition: all 0.15s;
 }
-.unit-sel:focus, .unit-sel:hover { color: var(--accent); background: var(--bg3); }
+.unit-sel:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background-color: var(--bg2);
+  box-shadow: 0 0 0 1px var(--accent), 0 2px 6px var(--glow);
+}
+.unit-sel:focus {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--glow);
+}
+.unit-sel:active { transform: scale(0.94); }
 
 /* THEME TOGGLE */
 .theme-btn {
@@ -720,8 +738,8 @@ body {
   .set-field-lbl { font-size: 9px; }
   .fill-btn { padding: 2px 6px; font-size: 8px; }
   .set-inp { padding: 7px 6px; font-size: 12px; }
-  .weight-wrap .set-inp { padding-right: 38px; }
-  .unit-sel { width: 36px; font-size: 9px; }
+  .weight-wrap .set-inp { padding-right: 44px; }
+  .unit-sel { width: 34px; right: 4px; top: 4px; bottom: 4px; font-size: 9px; padding-right: 9px; background-position: right 5px center; }
   .remove-set { width: 32px; height: 32px; }
   .log-shell { padding: 12px 12px 14px; }
   .set-toolbar { flex-direction: column; align-items: stretch; }
