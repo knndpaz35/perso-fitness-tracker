@@ -1174,7 +1174,12 @@ function formatConsistency(days) {
 
 function displaySetWeight(set, exId) {
   if (!set || set.weight === '' || set.weight === null || set.weight === undefined) return '';
-  const unit = set.unit || getExUnit(exId);
+  // Weight is always stored canonically in kg; always render it in whichever
+  // unit is currently selected for this exercise, regardless of which unit
+  // it was originally logged in. This way switching the unit toggle converts
+  // ALL displays for this exercise — current sets, last-session reference,
+  // history, and progress — not just the input box.
+  const unit = getExUnit(exId);
   const weight = parseFloat(set.weight) || 0;
   return unit === 'lbs' ? Math.round(weight * 2.20462 * 10) / 10 : weight;
 }
@@ -1252,51 +1257,22 @@ function setUnit(u, exId) {
   ST.exUnits[exId] = u;
   saveState();
 
-  // Only touch the card for this exercise
+  // Re-render this card from canonical (kg) storage so every weight shown —
+  // current sets, placeholders, and the "Last session" reference — converts
+  // exactly to the new unit. (Patching displayed values in place previously
+  // caused tiny rounding drift if you flipped the unit back and forth, and
+  // didn't touch the last-session reference at all.)
   const card = document.getElementById('exc-' + exId);
   if (!card) return;
-
-  // Update all unit selects in this card
-  card.querySelectorAll('.unit-sel').forEach(sel => { sel.value = u; });
-
-  // Convert weight input values already typed in this card
-  card.querySelectorAll('.weight-wrap .set-inp').forEach(inp => {
-    const raw = parseFloat(inp.value);
-    if (!isNaN(raw) && raw > 0) {
-      const prevUnit = inp.dataset.unit || 'kg';
-      if (prevUnit === u) return; // no change
-      inp.value = u === 'lbs'
-        ? Math.round(raw * 2.20462 * 10) / 10
-        : Math.round(raw / 2.20462 * 100) / 100;
-    }
-    inp.dataset.unit = u;
-
-    // Update placeholder
-    const ph = parseFloat(inp.placeholder);
-    if (!isNaN(ph) && ph > 0) {
-      const prevU = inp.dataset.phUnit || 'kg';
-      if (prevU !== u) {
-        inp.placeholder = u === 'lbs'
-          ? Math.round(ph * 2.20462 * 10) / 10
-          : Math.round(ph / 2.20462 * 100) / 100;
-        inp.dataset.phUnit = u;
-      }
-    }
-  });
-
-  // Update last-session reference pills in this card
-  card.querySelectorAll('.ref-pill').forEach(pill => {
-    pill.textContent = pill.textContent.replace(
-      /(\d+\.?\d*)\s*(kg|lbs)/i,
-      (_, num, fromUnit) => {
-        if (fromUnit === u) return num + fromUnit;
-        const n = parseFloat(num);
-        return u === 'lbs'
-          ? (Math.round(n * 2.20462 * 10) / 10) + 'lbs'
-          : (Math.round(n / 2.20462 * 100) / 100) + 'kg';
-      }
-    );
-  });
+  const wasOpen = card.classList.contains('open');
+  const ex = findExercise(exId);
+  if (!ex) return;
+  const dateStr = today();
+  const log = getLog(dateStr);
+  const split = getSplit(dateStr);
+  card.outerHTML = buildCard(ex, log, dateStr, split);
+  const newCard = document.getElementById('exc-' + exId);
+  if (newCard && wasOpen) newCard.classList.add('open');
 }
 
 
@@ -1538,11 +1514,8 @@ function buildCard(ex, log, dateStr, split) {
   let refHtml = '';
   if (lastSets && lastSets.some(s => s.weight)) {
     const pills = lastSets.filter(s => s.weight || s.reps).map((s, i) => {
-      // Use the unit that was stored with that set, or fallback to this ex's current unit
-      const setUnit = s.unit || 'kg';
       const dw = s.weight ? displaySetWeight(s, ex.id) : '?';
-      const dispU = setUnit;
-      return `<span class="ref-pill">S${i+1}: ${dw}${dispU} × ${s.reps || '?'}</span>`;
+      return `<span class="ref-pill">S${i+1}: ${dw}${s.weight?u:''} × ${s.reps || '?'}</span>`;
     }).join('');
     const feelLabel = lastSession?.log?.feedback ? { easy: 'Easy', ok: 'Good', hard: 'Hard' }[lastSession.log.feedback] : 'Not set';
     const failLabel = lastSession?.log?.failure ? 'Taken to failure' : 'Stopped in reserve';
@@ -1853,21 +1826,21 @@ function openDayModal(dstr) {
       if (!exLog) return '';
       const hasSets = exLog.sets?.some(s => s.weight || s.reps);
       if (!hasSets && !exLog.done) return '';
+      const exU = getExUnit(ex.id);
       const vol = exLog.sets?.reduce((s, set) => s + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0) || 0;
       totalVol += vol;
-      const dispVol = u === 'lbs' ? Math.round(vol * 2.20462) : Math.round(vol);
+      const dispVol = exU === 'lbs' ? Math.round(vol * 2.20462) : Math.round(vol);
       const pills = (exLog.sets || []).filter(s => s.weight || s.reps).map((s, i) => {
         const isFail = exLog.failure && i === (exLog.sets.filter(x => x.weight || x.reps).length - 1);
-        const setU = s.unit || 'kg';
-        const dw = s.weight ? (setU === 'lbs' ? Math.round(parseFloat(s.weight)*2.20462*10)/10 : parseFloat(s.weight)) : '—';
-        return `<span class="dm-pill ${isFail?'fail':''}">S${i+1}: ${dw}${s.weight?setU:''} × ${s.reps||'—'}${isFail?' 🔥':''}</span>`;
+        const dw = s.weight ? displaySetWeight(s, ex.id) : '—';
+        return `<span class="dm-pill ${isFail?'fail':''}">S${i+1}: ${dw}${s.weight?exU:''} × ${s.reps||'—'}${isFail?' 🔥':''}</span>`;
       }).join('');
       const fb = exLog.feedback;
       return `<div class="dm-ex">
         <div class="dm-exn">${ex.name} ${exLog.done?'✅':''}</div>
         ${fb?`<div class="dm-fb" style="background:${fbC[fb]}18;color:${fbC[fb]};border:1px solid ${fbC[fb]}30">${fbL[fb]}</div>`:''}
         <div class="dm-pills">${pills||'<span style="font-size:12px;color:var(--ink3)">No sets recorded</span>'}</div>
-        ${vol>0?`<div class="dm-vol">Volume: ${dispVol}${u}</div>`:''}
+        ${vol>0?`<div class="dm-vol">Volume: ${dispVol}${exU}</div>`:''}
       </div>`;
     }).filter(Boolean).join('');
     if (!body.trim()) body = `<div class="dm-empty">Session marked complete but no set data recorded.</div>`;
@@ -1917,7 +1890,7 @@ function renderPrChart(exId) {
   let ex = null;
   Object.values(EX).forEach(arr => { const f = arr.find(e => e.id === exId); if (f) ex = f; });
   if (!ex) return;
-  const u = unitLabel();
+  const u = getExUnit(exId);
   const data = [];
   Object.entries(ST.logs).sort(([a],[b]) => a.localeCompare(b)).forEach(([date, log]) => {
     const exLog = log.exercises?.[exId];
@@ -1930,8 +1903,7 @@ function renderPrChart(exId) {
     if (maxKg > 0 || reps > 0) data.push({ date, maxW, vol, reps, feedback: exLog.feedback, failure: exLog.failure });
   });
   const prKg = ST.prs[exId] || 0;
-  const exU = getExUnit(exId);
-  const prDisp = prKg ? (exU==='lbs'?Math.round(prKg*2.20462*10)/10:prKg) : '—';
+  const prDisp = prKg ? (u==='lbs'?Math.round(prKg*2.20462*10)/10:prKg) : '—';
   const maxW = data.length ? Math.max(...data.map(d => d.maxW)) : 0;
   let svgHtml = '';
   if (data.length >= 2) {
@@ -1976,7 +1948,7 @@ function renderPrChart(exId) {
   document.getElementById('pr-content').innerHTML = `
     <div class="chart-card">
       <div class="cc-title">${ex.name}</div>
-      <div class="cc-sub">PR: ${prDisp}${prKg?exU:''} · ${data.length} session${data.length!==1?'s':''} logged</div>
+      <div class="cc-sub">PR: ${prDisp}${prKg?u:''} · ${data.length} session${data.length!==1?'s':''} logged</div>
       ${svgHtml}
     </div>
     <div class="chart-card" style="overflow-x:auto">
