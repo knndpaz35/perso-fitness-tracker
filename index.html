@@ -935,6 +935,8 @@ function initState() {
   return {
     startDate: ds(d),
     lastStartDate: null,
+    shiftDate: null, shiftStartDate: null,
+    lastShiftDate: null, lastShiftStartDate: null, lastTodayOverride: null,
     logs: {}, streak: 0, sessions: 0, prs: {},
     unit: 'kg', theme: 'dark',
     todayOverride: null, lastOverrideDate: null,
@@ -947,6 +949,11 @@ function normalizeState(s) {
   if (!s || typeof s !== 'object') return initState();
   if (!s.startDate) { const d = new Date(); d.setDate(d.getDate() - 5); s.startDate = ds(d); }
   if (!('lastStartDate' in s)) s.lastStartDate = null;
+  if (!('shiftDate' in s)) s.shiftDate = null;
+  if (!('shiftStartDate' in s)) s.shiftStartDate = null;
+  if (!('lastShiftDate' in s)) s.lastShiftDate = null;
+  if (!('lastShiftStartDate' in s)) s.lastShiftStartDate = null;
+  if (!('lastTodayOverride' in s)) s.lastTodayOverride = null;
   if (!s.logs) s.logs = {};
   if (typeof s.streak !== 'number') s.streak = 0;
   if (typeof s.sessions !== 'number') s.sessions = 0;
@@ -1101,14 +1108,18 @@ function parseLocal(dateStr) {
   const [y,m,d] = dateStr.split('-').map(Number);
   return new Date(y, m-1, d);
 }
-function dayIdx(dateStr) {
-  const ms = parseLocal(dateStr) - parseLocal(ST.startDate);
+function dayIdx(dateStr, anchor) {
+  const ms = parseLocal(dateStr) - parseLocal(anchor);
   const diff = Math.floor(ms / 86400000);
   return ((diff % 7) + 7) % 7;
 }
 function getSplit(dateStr) {
   if (dateStr === today() && ST.todayOverride) return ST.todayOverride;
-  return CYCLE[dayIdx(dateStr)];
+  // A split switch only re-aligns the cycle from the switch date forward.
+  // Days before the switch always use the original anchor, so history
+  // (completed/missed status of past days) never gets relabeled.
+  const anchor = (ST.shiftDate && dateStr >= ST.shiftDate) ? ST.shiftStartDate : ST.startDate;
+  return CYCLE[dayIdx(dateStr, anchor)];
 }
 function getLog(dateStr) {
   if (!ST.logs[dateStr]) ST.logs[dateStr] = { exercises: {}, completed: false };
@@ -1364,11 +1375,17 @@ function overrideSplit(val) {
   if (!val) return;
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
-  ST.lastStartDate = ST.startDate;
+  ST.lastShiftDate = ST.shiftDate;
+  ST.lastShiftStartDate = ST.shiftStartDate;
+  ST.lastTodayOverride = ST.todayOverride;
   const targetIdx = CYCLE.indexOf(val);
   const newStart = parseLocal(today());
   newStart.setDate(newStart.getDate() - targetIdx);
-  ST.startDate = ds(newStart);
+  // shiftDate/shiftStartDate re-align the cycle starting today onward only —
+  // ST.startDate (used for all dates before shiftDate) is left untouched,
+  // so past days keep showing the split they were actually scheduled/done as.
+  ST.shiftDate = today();
+  ST.shiftStartDate = ds(newStart);
   ST.todayOverride = val;
   ST.lastOverrideDate = today();
   saveState();
@@ -1377,9 +1394,12 @@ function overrideSplit(val) {
 }
 
 function undoSplit() {
-  if (ST.lastStartDate) ST.startDate = ST.lastStartDate;
-  ST.lastStartDate = null;
-  ST.todayOverride = null;
+  ST.shiftDate = ST.lastShiftDate;
+  ST.shiftStartDate = ST.lastShiftStartDate;
+  ST.todayOverride = ST.lastTodayOverride;
+  ST.lastShiftDate = null;
+  ST.lastShiftStartDate = null;
+  ST.lastTodayOverride = null;
   ST.lastOverrideDate = null;
   saveState();
   showToast('Split override undone');
@@ -1463,8 +1483,13 @@ function renderHome() {
     btn.textContent = miss.actionLabel;
     btn.onclick = () => {
       if (miss.restart) {
-        // Restart: set startDate so today = Day 1 (push)
-        ST.startDate = today();
+        // Restart: re-align so today = Day 1 (push), without touching
+        // how past days are labeled/shown.
+        ST.lastShiftDate = ST.shiftDate;
+        ST.lastShiftStartDate = ST.shiftStartDate;
+        ST.lastTodayOverride = ST.todayOverride;
+        ST.shiftDate = today();
+        ST.shiftStartDate = today();
         ST.todayOverride = null;
         ST.lastOverrideDate = null;
         saveState();
