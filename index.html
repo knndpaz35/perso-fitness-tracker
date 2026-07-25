@@ -963,8 +963,7 @@ function initState() {
   return {
     startDate: ds(d),
     lastStartDate: null,
-    shiftDate: null, shiftStartDate: null,
-    lastShiftDate: null, lastShiftStartDate: null, lastTodayOverride: null,
+    splitSwitches: [],          // [{date, anchor}] — ordered list of all split switches
     logs: {}, streak: 0, sessions: 0, prs: {},
     unit: 'kg', theme: 'dark',
     todayOverride: null, lastOverrideDate: null,
@@ -977,11 +976,17 @@ function normalizeState(s) {
   if (!s || typeof s !== 'object') return initState();
   if (!s.startDate) { const d = new Date(); d.setDate(d.getDate() - 5); s.startDate = ds(d); }
   if (!('lastStartDate' in s)) s.lastStartDate = null;
-  if (!('shiftDate' in s)) s.shiftDate = null;
-  if (!('shiftStartDate' in s)) s.shiftStartDate = null;
-  if (!('lastShiftDate' in s)) s.lastShiftDate = null;
-  if (!('lastShiftStartDate' in s)) s.lastShiftStartDate = null;
-  if (!('lastTodayOverride' in s)) s.lastTodayOverride = null;
+  // Migrate from old single-slot shiftDate/shiftStartDate to the new
+  // splitSwitches history log. Any saved shiftDate becomes the first entry.
+  if (!Array.isArray(s.splitSwitches)) {
+    s.splitSwitches = [];
+    if (s.shiftDate && s.shiftStartDate) {
+      s.splitSwitches.push({ date: s.shiftDate, anchor: s.shiftStartDate });
+    }
+    // Drop now-obsolete fields so they don't confuse future reads
+    delete s.shiftDate; delete s.shiftStartDate;
+    delete s.lastShiftDate; delete s.lastShiftStartDate; delete s.lastTodayOverride;
+  }
   if (!s.logs) s.logs = {};
   if (typeof s.streak !== 'number') s.streak = 0;
   if (typeof s.sessions !== 'number') s.sessions = 0;
@@ -1143,10 +1148,18 @@ function dayIdx(dateStr, anchor) {
 }
 function getSplit(dateStr) {
   if (dateStr === today() && ST.todayOverride) return ST.todayOverride;
-  // A split switch only re-aligns the cycle from the switch date forward.
-  // Days before the switch always use the original anchor, so history
-  // (completed/missed status of past days) never gets relabeled.
-  const anchor = (ST.shiftDate && dateStr >= ST.shiftDate) ? ST.shiftStartDate : ST.startDate;
+  // Walk the switch history to find which anchor was in effect on dateStr.
+  // Switches are stored in date order; we want the latest one whose date
+  // is still <= dateStr (i.e. the switch had already happened by that day).
+  // Dates before any switch use the original startDate anchor.
+  const switches = ST.splitSwitches || [];
+  let anchor = ST.startDate;
+  for (let i = switches.length - 1; i >= 0; i--) {
+    if (switches[i].date <= dateStr) {
+      anchor = switches[i].anchor;
+      break;
+    }
+  }
   return CYCLE[dayIdx(dateStr, anchor)];
 }
 function getLog(dateStr) {
@@ -1442,31 +1455,33 @@ function overrideSplit(val) {
   if (!val) return;
   document.getElementById('split-sel').value = '';
   if (val === getSplit(today())) { showToast('Already on that split'); return; }
-  ST.lastShiftDate = ST.shiftDate;
-  ST.lastShiftStartDate = ST.shiftStartDate;
-  ST.lastTodayOverride = ST.todayOverride;
+
   const targetIdx = CYCLE.indexOf(val);
   const newStart = parseLocal(today());
   newStart.setDate(newStart.getDate() - targetIdx);
-  // shiftDate/shiftStartDate re-align the cycle starting today onward only —
-  // ST.startDate (used for all dates before shiftDate) is left untouched,
-  // so past days keep showing the split they were actually scheduled/done as.
-  ST.shiftDate = today();
-  ST.shiftStartDate = ds(newStart);
+  const anchor = ds(newStart);
+  const t = today();
+
+  if (!ST.splitSwitches) ST.splitSwitches = [];
+  // Replace any existing entry for today (user can switch more than once per day)
+  ST.splitSwitches = ST.splitSwitches.filter(s => s.date !== t);
+  ST.splitSwitches.push({ date: t, anchor });
+  // Keep sorted so the walk in getSplit is always correct
+  ST.splitSwitches.sort((a, b) => a.date.localeCompare(b.date));
+
   ST.todayOverride = val;
-  ST.lastOverrideDate = today();
+  ST.lastOverrideDate = t;
   saveState();
   showToast(`Schedule set — today is ${SNAME[val]}`);
   renderHome();
 }
 
 function undoSplit() {
-  ST.shiftDate = ST.lastShiftDate;
-  ST.shiftStartDate = ST.lastShiftStartDate;
-  ST.todayOverride = ST.lastTodayOverride;
-  ST.lastShiftDate = null;
-  ST.lastShiftStartDate = null;
-  ST.lastTodayOverride = null;
+  const t = today();
+  if (!ST.splitSwitches) ST.splitSwitches = [];
+  // Remove today's switch entry so the schedule reverts to what it was before
+  ST.splitSwitches = ST.splitSwitches.filter(s => s.date !== t);
+  ST.todayOverride = null;
   ST.lastOverrideDate = null;
   saveState();
   showToast('Split override undone');
@@ -1539,7 +1554,7 @@ function renderHome() {
   document.getElementById('ov-current').textContent = SNAME[split];
   document.getElementById('split-sel').value = '';
   const undoBtn = document.getElementById('undo-split-btn');
-  if (undoBtn) undoBtn.style.display = ST.todayOverride && ST.lastOverrideDate === t ? 'inline-flex' : 'none';
+  if (undoBtn) undoBtn.style.display = (ST.splitSwitches || []).some(s => s.date === t) ? 'inline-flex' : 'none';
 
   // Suggestion
   const miss = getMissedInfo();
@@ -1550,13 +1565,13 @@ function renderHome() {
     btn.textContent = miss.actionLabel;
     btn.onclick = () => {
       if (miss.restart) {
-        // Restart: re-align so today = Day 1 (push), without touching
-        // how past days are labeled/shown.
-        ST.lastShiftDate = ST.shiftDate;
-        ST.lastShiftStartDate = ST.shiftStartDate;
-        ST.lastTodayOverride = ST.todayOverride;
-        ST.shiftDate = today();
-        ST.shiftStartDate = today();
+        // Restart: push a switch entry for today with today as the anchor,
+        // making today = push (CYCLE[0]) without relabeling any past days.
+        if (!ST.splitSwitches) ST.splitSwitches = [];
+        const t2 = today();
+        ST.splitSwitches = ST.splitSwitches.filter(s => s.date !== t2);
+        ST.splitSwitches.push({ date: t2, anchor: t2 });
+        ST.splitSwitches.sort((a, b) => a.date.localeCompare(b.date));
         ST.todayOverride = null;
         ST.lastOverrideDate = null;
         saveState();
