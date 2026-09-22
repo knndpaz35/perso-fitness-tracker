@@ -55,6 +55,20 @@ body {
   transition: background 0.3s, color 0.3s;
 }
 
+/* ── GYM / HOME MODE ────────────────────────── */
+.env-bar {
+  flex-shrink: 0; height: 34px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; transition: all 0.3s;
+}
+.env-bar.gym { background: rgba(0,229,255,0.07); color: var(--accent3); border-bottom: 1px solid rgba(0,229,255,0.15); }
+.env-bar.home { background: rgba(255,77,109,0.07); color: var(--push); border-bottom: 1px solid rgba(255,77,109,0.12); }
+.env-toggle { display: flex; background: var(--bg3); border: 1px solid var(--border2); border-radius: 999px; overflow: hidden; }
+.env-btn { padding: 3px 14px; border: none; background: transparent; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: all 0.2s; color: var(--ink3); }
+.env-btn.active-gym { background: var(--accent3); color: #0c0c0e; }
+.env-btn.active-home { background: var(--push); color: #fff; }
+
 /* ── TOPBAR ──────────────────────────────────────────── */
 .topbar {
   flex-shrink: 0;
@@ -761,6 +775,13 @@ body {
   </div>
 </div>
 
+<div class="env-bar home" id="env-bar">
+  <span id="env-label">🏠 Home Mode</span>
+  <div class="env-toggle">
+    <button class="env-btn active-home" id="env-home" onclick="setEnv('home')">Home</button>
+    <button class="env-btn" id="env-gym" onclick="setEnv('gym')">Gym</button>
+  </div>
+</div>
 <div class="pages">
 
 <!-- ===== HOME ===== -->
@@ -950,6 +971,108 @@ const EX = {
 };
 
 // ════════════════════════════════════════════════════════
+// GYM EXERCISE DATA — V-shape + Big Glutes focus
+// Science basis: higher loads, cables, machines, barbells
+// V-shape = wide lats + wide shoulders + narrow waist illusion
+// Big glutes = progressive overload on hip thrust, squat, RDL
+// ════════════════════════════════════════════════════════
+const GYM_EX = {
+  push:[
+    {id:'g_bench',     name:'Barbell Bench Press',        target:'4 × 4–6',    muscles:'Chest · Triceps · Front Delt',    yt:'vcBig73ojpE',
+     def:'Heavier than home — 4-6 rep strength range. Grip just wider than shoulders. Arch naturally, feet drive into floor. Touch chest lightly, press explosively to lockout. V-shape tip: a wide, thick chest broadens the upper torso visually.'},
+    {id:'g_inc_press', name:'Incline Barbell Press',       target:'4 × 6–8',    muscles:'Upper Chest · Front Delt',        yt:'8iPEnn-ltC8',
+     def:'30–45° incline. Barbell allows heavier loading than dumbbells for upper chest. Lower to clavicle level, press to lockout. Upper chest fullness is critical for the V-shape — it widens the top of the torso.'},
+    {id:'g_ohp',       name:'Seated Machine OHP',          target:'4 × 8–10',   muscles:'All 3 Deltoid Heads · Triceps',   yt:'2yjwXTZQDDI',
+     def:'Machine overhead press allows heavier load with built-in stability. Seat adjusted so handles are at shoulder height. Press to full lockout, lower with 3-second eccentric. Big shoulders are the #1 visual driver of the V-shape.'},
+    {id:'g_cable_fly', name:'Cable Chest Fly (Low-to-High)',target:'3 × 12–15', muscles:'Upper Chest — Stretch Focus',      yt:'eozdVDA78K0',
+     def:'Cables set low. Pull handles up and together in an arc, crossing at chest height. Cables maintain constant tension through the entire ROM unlike dumbbells — superior hypertrophy stimulus. Squeeze hard at peak contraction.'},
+    {id:'g_lat_raise', name:'Cable Lateral Raise',          target:'4 × 12–15', muscles:'Medial Deltoid',                  yt:'kDqklk1ZESo',
+     def:'Cable set at ankle height, grab handle across body. Raise arm to shoulder height leading with elbow. Cable tension is highest at the top — opposite of dumbbells, which are hardest at the bottom. Superior medial deltoid overload for shoulder width.'},
+    {id:'g_tricep_pd', name:'Cable Tricep Pushdown',        target:'3 × 10–12', muscles:'Triceps — Long Head',             yt:'2-LAMcpzODU',
+     def:'Rope attachment, elbows pinned to sides. Press rope down and apart at the bottom — this splits the rope and fully contracts the triceps. Full lockout at bottom. Tricep long head runs along the back of the arm and contributes to arm size significantly.'},
+  ],
+  pull:[
+    {id:'g_lat_pull',  name:'Lat Pulldown (Wide Grip)',     target:'4 × 6–10',  muscles:'Lats · Biceps · Rear Delt',       yt:'eGo4IYlbE5g',
+     def:'Wide grip, slightly outside shoulder width. Pull bar to upper chest, lead with elbows driving toward hips. Lean back 10–15°. CRITICAL for V-shape: wide lats are the single biggest contributor to the V-taper. Train these heavy every session.'},
+    {id:'g_seated_row', name:'Seated Cable Row (Close Grip)',target:'4 × 8–10', muscles:'Mid-Back · Lats · Rhomboids',      yt:'FWJR5Ve8bnQ',
+     def:'Sit upright, feet on platform. Row handle to lower sternum, squeeze shoulder blades together hard at end. Pause 1 second. Mid-back thickness adds to the V-shape by creating depth when viewed from the side.'},
+    {id:'g_pullup',    name:'Weighted Pull-Ups',             target:'3 × 6–8',   muscles:'Lats · Biceps',                   yt:'eGo4IYlbE5g',
+     def:'Add weight via belt or holding a dumbbell. Dead hang start. Pull to chin over bar, elbows travel toward hips — not down. This is the king of lat mass. Adding load here directly translates to visible lat spread.'},
+    {id:'g_face_pull', name:'Cable Face Pull',               target:'3 × 15–20', muscles:'Rear Delt · Rotator Cuff',        yt:'rep-qVOkqgk',
+     def:'Cable at face height, rope attachment. Pull toward face, elbows flare wide and high. At end range: externally rotate. Maintains shoulder health under the heavy pressing volume. Never skip.'},
+    {id:'g_straight_pull', name:'Straight-Arm Lat Pulldown', target:'3 × 12–15',muscles:'Lats — Isolation',                yt:'eGo4IYlbE5g',
+     def:'Cable high, bar or rope. Arms straight, hinge at shoulder only. Pull bar from overhead to hips in a sweeping arc. Pure lat isolation — no bicep involvement. Finishes the lats in the fully lengthened position for maximum hypertrophy stimulus.'},
+    {id:'g_curl',      name:'EZ-Bar Preacher Curl',          target:'3 × 8–12',  muscles:'Biceps — Peak',                   yt:'zC3nLlEvin4',
+     def:'Preacher bench locks the upper arm, removing cheating. Full stretch at the bottom is critical — this is where the bicep is under maximum mechanical tension. Curl to full contraction. EZ-bar reduces wrist strain vs straight bar.'},
+  ],
+  legs:[
+    {id:'g_hip_thrust', name:'Barbell Hip Thrust (Heavy)',   target:'4 × 6–10',  muscles:'Gluteus Maximus — Primary',       yt:'LM8XHLYJoYs',
+     def:'Gym allows heavier loading than home. Use a dedicated hip thrust bench or flat bench. Load the bar progressively every session — this is your primary glute mass exercise. 1–2 second hold at full hip extension, squeeze maximally. Research by Contreras (2015) confirms 4x higher glute EMG than squats.'},
+    {id:'g_squat',      name:'Barbell Back Squat',            target:'4 × 4–6',   muscles:'Glutes · Quads · Hamstrings',     yt:'ultWZbUMPL8',
+     def:'Use the squat rack. Heavier loads in the strength range (4–6 reps) for maximum glute and quad development. Below parallel is mandatory — this is where glutes are maximally stretched. Add weight every session or every other session.'},
+    {id:'g_rdl',        name:'Barbell Romanian Deadlift',     target:'4 × 8–10',  muscles:'Hamstrings · Lower Glutes',       yt:'JCXUYuzwNrM',
+     def:'Load heavier than home dumbbells allow. Push hips back, bar stays close to legs. Deep hamstring stretch — feel it at the back of your thigh. 3-second eccentric on the way down. This builds the lower glute and hamstring tie-in critical for glute shape.'},
+    {id:'g_legpress',   name:'Leg Press (High Foot Placement)',target:'3 × 10–12',muscles:'Glutes · Quads',                  yt:'ultWZbUMPL8',
+     def:'Place feet high and wide on the platform — this shifts load from quads to glutes. Full depth (knees to chest), press through heels. Leg press allows heavier loading than any squat variation, driving more mechanical tension on the glutes.'},
+    {id:'g_cable_abduct','name':'Cable Hip Abduction',        target:'3 × 12–15', muscles:'Gluteus Medius · Minimus',        yt:'SBEGNMSsZJQ',
+     def:'Cable at ankle height, cuff attached. Stand sideways, lift leg outward against cable resistance. Squeeze glute medius at peak. Cable maintains constant tension through full ROM unlike dumbbells — superior hypertrophy for the outer glute that creates the round shape.'},
+    {id:'g_leg_curl',   name:'Lying Leg Curl Machine',        target:'3 × 10–12', muscles:'Hamstrings — Isolation',          yt:'JCXUYuzwNrM',
+     def:'Lie face down, pad on lower calves. Curl heels toward glutes. Full ROM — full extension to full curl. Slow eccentric (3 seconds). Machine allows isolated hamstring loading impossible to achieve with free weights alone. Hamstring fullness contributes directly to glute shape from the rear.'},
+  ],
+  upper:[
+    {id:'g_seated_ohp', name:'Seated Barbell OHP',           target:'4 × 6–8',   muscles:'All 3 Deltoid Heads · Triceps',   yt:'2yjwXTZQDDI',
+     def:'Seated in rack, bar at chin height. Grip just outside shoulders. Press to full lockout above head. Lower to chin with control. Seated removes leg drive — pure shoulder and tricep work. Heavier than standing for most people. V-shape cornerstone.'},
+    {id:'g_inc_db',     name:'Incline Dumbbell Press',        target:'3 × 10–12', muscles:'Upper Chest',                     yt:'8iPEnn-ltC8',
+     def:'Second upper chest session. 30–45° incline. Go slightly lighter than Day 1, focus on the stretch and squeeze. Upper chest fullness creates the shelf that makes the V-shape pop.'},
+    {id:'g_cable_row',  name:'Single-Arm Cable Row',          target:'3 × 10–12', muscles:'Lats · Mid-Back',                 yt:'pYcpY20QaE8',
+     def:'Cable set low. Row handle to hip, full lat stretch at the bottom. Greater ROM than dumbbell row. Unilateral work corrects side-to-side imbalances. Pull elbow past hip at the top.'},
+    {id:'g_cable_lat',  name:'Cable Lateral Raise (Strict)',  target:'4 × 12–15', muscles:'Medial Deltoid',                  yt:'kDqklk1ZESo',
+     def:'Second lateral raise session. Cable from low pulley, across body. No swinging. Full ROM. Cable keeps constant tension unlike dumbbells — the muscle works hardest at the top, exactly where the hypertrophy signal is. Second weekly session is the biggest driver of shoulder width.'},
+    {id:'g_pec_deck',  name:'Pec Deck / Chest Fly Machine',  target:'3 × 12–15', muscles:'Chest — Stretch Focus',            yt:'eozdVDA78K0',
+     def:'Adjust seat so handles are at chest height. Open arms wide — full stretch at the back. Close arms together, squeeze pecs hard. Machine provides constant tension and isolates the pec without wrist/elbow strain. Superior chest isolation compared to dumbbell fly.'},
+    {id:'g_rear_delt',  name:'Cable Rear Delt Fly',           target:'3 × 15–20', muscles:'Posterior Deltoid · Rotator Cuff', yt:'ttvfGg9d76c',
+     def:'Cables crossed at face height. Grab opposite handles. Pull arms wide and back — like opening a cape. Squeeze rear delts. Cable tension remains constant through the full arc, unlike dumbbell fly which drops off at the top. Finishes the posterior deltoid and maintains shoulder balance.'},
+  ],
+  lower:[
+    {id:'g_hip_thrust2','name':'Barbell Hip Thrust (Max Load)', target:'4 × 6–10', muscles:'Gluteus Maximus — Primary',      yt:'LM8XHLYJoYs',
+     def:'Second hip thrust session of the week. Go as heavy as possible with perfect form. 1–2 second isometric hold at lockout. This is the most important set of your entire week for glute size. Progressive overload here — even 2.5kg more than last time — is the mechanism of glute hypertrophy.'},
+    {id:'g_rdl2',       name:'Romanian Deadlift (Deficit)',    target:'4 × 8–10',  muscles:'Hamstrings · Lower Glutes',       yt:'JCXUYuzwNrM',
+     def:'Stand on 2–4 inch deficit (plates or step). Greater ROM allows deeper hamstring and lower glute stretch. 3-second eccentric. Maeo et al. (2021) showed lengthened-position training produces 40% more hypertrophy. Load moderately — the deficit changes the stimulus significantly.'},
+    {id:'g_sumo_dl',    name:'Sumo Deadlift',                  target:'3 × 6–8',   muscles:'Glutes · Inner Thighs · Hamstrings', yt:'Fob2woz9-dc',
+     def:'Wide stance, toes 45° out, grip inside legs. Drive floor away — do not think of it as a pull. Hips and shoulders rise together. Lockout: squeeze glutes hard, hips fully extended. Sumo stance recruits glutes and adductors more than conventional deadlift.'},
+    {id:'g_cable_abduct2','name':'Seated Cable Hip Abduction', target:'3 × 12–15', muscles:'Gluteus Medius — Isolation',      yt:'SBEGNMSsZJQ',
+     def:'Sit on cable machine bench, ankle cuff attached, pull laterally. Or use abductor machine. Squeeze glute medius at peak, 3-second eccentric. Second weekly glute medius session — essential for the round outer-hip shape. Cannot be developed from squats or hip thrusts alone.'},
+    {id:'g_rev_lunge',  name:'Barbell Reverse Lunge',          target:'3 × 10–12', muscles:'Glutes · Quads',                  yt:'D7KaRcUTQeE',
+     def:'Barbell on back (or heavy dumbbells). Step backward, lower rear knee to floor. Front shin stays vertical. Lean torso forward 10–15° to shift load to glute. Drive through front heel. Heavier than dumbbell version — greater mechanical stimulus.'},
+    {id:'g_leg_curl2',  name:'Lying or Seated Leg Curl',       target:'3 × 10–12', muscles:'Hamstrings — Stretch Focus',      yt:'JCXUYuzwNrM',
+     def:'Second hamstring isolation session. Seated leg curl puts the hamstring in a more lengthened starting position than lying — studies show greater hypertrophy stimulus. Full ROM both directions. 3-second eccentric. Hamstring fullness builds the lower glute-ham tie-in.'},
+  ],
+  rest:[]
+};
+
+// ════════════════════════════════════════════════════════
+// ENV HELPERS
+// ════════════════════════════════════════════════════════
+function getActiveEX() { return (ST && ST.env === 'gym') ? GYM_EX : EX; }
+
+function setEnv(env) {
+  ST.env = env; saveState(); applyEnv(); renderHome();
+}
+
+function applyEnv() {
+  const bar = document.getElementById('env-bar');
+  const label = document.getElementById('env-label');
+  const homeBtn = document.getElementById('env-home');
+  const gymBtn = document.getElementById('env-gym');
+  if (!bar) return;
+  const isGym = ST.env === 'gym';
+  bar.className = 'env-bar ' + (isGym ? 'gym' : 'home');
+  label.textContent = isGym ? '🏋️ Gym Mode' : '🏠 Home Mode';
+  homeBtn.className = 'env-btn' + (!isGym ? ' active-home' : '');
+  gymBtn.className = 'env-btn' + (isGym ? ' active-gym' : '');
+}
+
+// ════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://myzxtobejjhjraesywnk.supabase.co';
@@ -963,11 +1086,11 @@ function initState() {
   return {
     startDate: ds(d),
     lastStartDate: null,
-    splitSwitches: [],          // [{date, anchor}] — ordered list of all split switches
+    splitSwitches: [],
     logs: {}, streak: 0, sessions: 0, prs: {},
     unit: 'kg', theme: 'dark',
     todayOverride: null, lastOverrideDate: null,
-    exUnits: {}
+    exUnits: {}, env: 'home'
   };
 }
 
@@ -996,6 +1119,7 @@ function normalizeState(s) {
   if (!('todayOverride' in s)) s.todayOverride = null;
   if (!('lastOverrideDate' in s)) s.lastOverrideDate = null;
   if (!s.exUnits) s.exUnits = {};
+  if (!s.env) s.env = 'home';
   return s;
 }
 
@@ -1302,7 +1426,7 @@ function syncExerciseCompletion(dateStr, exId) {
     exLog.done = false;
   }
   const split = getSplit(dateStr);
-  const exes = EX[split] || [];
+  const exes = getActiveEX()[split] || [];
   const allDone = exes.every(ex => log.exercises[ex.id]?.done);
   if (allDone && !log.completed) {
     log.completed = true;
@@ -1547,7 +1671,7 @@ function renderHome() {
   }
 
   const split = getSplit(t);
-  const exes = EX[split] || [];
+  const exes = getActiveEX()[split] || [];
   const log = getLog(t);
 
   // Sync UI controls
@@ -1865,7 +1989,7 @@ function toggleDone(dateStr, exId) {
 }
 
 function updateStats() {
-  const t = today(); const split = getSplit(t); const exes = EX[split] || [];
+  const t = today(); const split = getSplit(t); const exes = getActiveEX()[split] || [];
   const log = getLog(t);
   const done = exes.filter(e => log.exercises[e.id]?.done).length;
   const pct = exes.length ? Math.round((done / exes.length) * 100) : 0;
@@ -1929,16 +2053,16 @@ function openDayModal(dstr) {
   if (split === 'rest') {
     body = `<div class="dm-empty">🛌 Rest day — no workout scheduled.</div>`;
   } else if (isFuture) {
-    const exes = EX[split] || [];
+    const exes = getActiveEX()[split] || [];
     body = `<div style="font-size:13px;color:var(--ink3);margin-bottom:12px;font-weight:500;">Scheduled — not yet completed.</div>`;
     body += exes.map(ex => `<div class="dm-ex"><div class="dm-exn">${ex.name}</div><div style="font-size:12px;color:var(--ink3)">${ex.target} · ${ex.muscles}</div></div>`).join('');
   } else if (!log || !Object.keys(log.exercises || {}).length) {
     body = `<div class="dm-empty">No log for this day.</div>`;
-    const exes = EX[split] || [];
+    const exes = getActiveEX()[split] || [];
     body += `<div style="font-size:12px;color:var(--ink3);margin:10px 0 8px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Scheduled workout:</div>`;
     body += exes.map(ex => `<div class="dm-ex"><div class="dm-exn">${ex.name}</div><div style="font-size:11px;color:var(--ink3)">${ex.target}</div></div>`).join('');
   } else {
-    const exes = EX[split] || [];
+    const exes = getActiveEX()[split] || [];
     const fbC = { easy: 'var(--legs)', ok: 'var(--pull)', hard: 'var(--push)' };
     const fbL = { easy: '😊 Easy', ok: '💪 Good', hard: '🔥 Hard' };
     let totalVol = 0;
@@ -1992,7 +2116,7 @@ function closeModal(e) {
 // ════════════════════════════════════════════════════════
 function renderProgress() {
   const allExes = []; const seen = new Set();
-  Object.values(EX).forEach(arr => arr.forEach(e => { if (!seen.has(e.id)) { seen.add(e.id); allExes.push(e); } }));
+  Object.values(getActiveEX()).forEach(arr => arr.forEach(e => { if (!seen.has(e.id)) { seen.add(e.id); allExes.push(e); } }));
   const pills = document.getElementById('pr-pills');
   const activeId = pills.querySelector('.prp.active')?.dataset.id || allExes[0]?.id;
   pills.innerHTML = allExes.map(e => `<button class="prp ${e.id===activeId?'active':''}" data-id="${e.id}" onclick="selectPr('${e.id}')">${e.name.split(' ').slice(0,3).join(' ')}</button>`).join('');
@@ -2009,7 +2133,7 @@ function selectPr(id) {
 }
 function renderPrChart(exId) {
   let ex = null;
-  Object.values(EX).forEach(arr => { const f = arr.find(e => e.id === exId); if (f) ex = f; });
+  Object.values(getActiveEX()).forEach(arr => { const f = arr.find(e => e.id === exId); if (f) ex = f; });
   if (!ex) return;
   const u = getExUnit(exId);
   const data = [];
@@ -2129,6 +2253,7 @@ loadState().then(data => {
   ST = data;
   ST_LOADED = true;
   applyTheme();
+  applyEnv();
   renderHome();
   setSyncDot('green');
 });
