@@ -2114,8 +2114,45 @@ function openDayModal(dstr) {
       </div>
       <button class="mcl" onclick="closeModal()">✕</button>
     </div>
-    <div class="mbody">${body}</div>`;
+    <div class="mbody">${body}
+      ${(!isFuture && split!=='rest') ? `<button class="btn" style="width:100%;margin-top:14px;" onclick="openPastEditor('${dstr}')">✎ Log / Edit This Session</button>` : ''}
+    </div>`;
   document.getElementById('modal-bg').classList.add('open');
+}
+
+// ── EDIT A PAST (OR TODAY'S) SESSION FROM THE CALENDAR/SLIDER MODAL ──
+// Reuses buildCard() so logging works exactly like the Home page — same
+// "same as last time" buttons, same auto-complete-on-fill logic, same
+// saveState() sync. Fixes the gap where finishing a session after midnight
+// meant the app had already switched to the next day's split and there was
+// no way back in to log the remaining exercises.
+function openPastEditor(dstr) {
+  const split = getSplit(dstr);
+  const exes = getActiveEX()[split] || [];
+  if (split === 'rest' || !exes.length) { showToast('Nothing to log for this day'); return; }
+  const log = getLog(dstr);
+  const d = new Date(dstr + 'T12:00:00');
+  const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const col = SCOL[split];
+
+  // Reuse buildCard exactly as the Home page does, then force every card
+  // open so nothing is hidden behind an extra tap.
+  let cardsHtml = exes.map(ex => buildCard(ex, log, dstr, split)).join('');
+  cardsHtml = cardsHtml.split('class="ex-card ').join('class="ex-card open ');
+
+  document.getElementById('modal').innerHTML = `
+    <div class="mh">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;">${label} · Editing</div>
+        <div class="mh-title" style="color:${col}">${SNAME[split]}</div>
+      </div>
+      <button class="mcl" onclick="closeModal()">✕</button>
+    </div>
+    <div class="mbody">
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:12px;line-height:1.5;">Fill in any sets you missed logging on the day. Everything saves the same way it does on Today — no need to finish in one sitting.</div>
+      ${cardsHtml}
+      <button class="btn" style="width:100%;margin-top:14px;" onclick="openDayModal('${dstr}')">← Back to summary</button>
+    </div>`;
 }
 function closeModal(e) {
   if (!e || e.target === document.getElementById('modal-bg')) document.getElementById('modal-bg').classList.remove('open');
